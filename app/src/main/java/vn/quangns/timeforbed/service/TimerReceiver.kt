@@ -19,7 +19,11 @@ class TimerReceiver : BroadcastReceiver() {
                 val prefs = Prefs.get(context)
                 if (prefs.timerDeadline == 0L) return
                 SleepTimer.cancel(context)
-                MediaKiller.stopAll(context, reason = "Hết giờ hẹn ngủ", lockScreen = prefs.lockAfterStop)
+                // Giữ tiến trình sống tới lần kiểm tra cuối (~4 s), kể cả khi app đang ở nền/đã bị đóng.
+                val pending = goAsync()
+                MediaKiller.stopAll(context, reason = "Hết giờ hẹn ngủ", lockScreen = prefs.lockAfterStop) {
+                    pending?.finish()
+                }
             }
             ACTION_WARN -> if (Prefs.get(context).timerDeadline != 0L) showWarning(context)
             ACTION_EXTEND -> SleepTimer.extend(context)

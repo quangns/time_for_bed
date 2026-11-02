@@ -80,7 +80,7 @@ fun NightScreen() {
     ) {
         ScreenHeader(
             "Ban đêm",
-            "Ngủ quên khi đang xem? Quá ${s.idleMinutes} phút không chạm vào máy trong khung giờ này, " +
+            subtitle = "Ngủ quên khi đang xem? Quá ${s.idleMinutes} phút không chạm vào máy trong khung giờ này, " +
                 "app sẽ tắt video, nhạc. Báo trước 1 phút.",
         )
 

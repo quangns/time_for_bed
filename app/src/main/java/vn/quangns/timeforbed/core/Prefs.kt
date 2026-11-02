@@ -19,6 +19,8 @@ data class Settings(
     val excluded: Set<String>,
     val lastActionAt: Long,
     val lastActionReason: String,
+    /** Báo cáo lần dừng media gần nhất (đã dừng app nào, còn gì phát). */
+    val lastStopReport: String,
 )
 
 /**
@@ -83,6 +85,8 @@ class Prefs private constructor(context: Context) {
         putString(K_LAST_ACTION_REASON, reason)
     }
 
+    fun recordStopReport(report: String) = sp.edit { putString(K_LAST_STOP_REPORT, report) }
+
     private fun read() = Settings(
         nightEnabled = nightEnabled,
         nightStart = nightStart,
@@ -94,6 +98,7 @@ class Prefs private constructor(context: Context) {
         excluded = excluded,
         lastActionAt = sp.getLong(K_LAST_ACTION_AT, 0L),
         lastActionReason = sp.getString(K_LAST_ACTION_REASON, "") ?: "",
+        lastStopReport = sp.getString(K_LAST_STOP_REPORT, "") ?: "",
     )
 
     companion object {
@@ -108,6 +113,7 @@ class Prefs private constructor(context: Context) {
         private const val K_EXCL_INIT = "excluded_initialized"
         private const val K_LAST_ACTION_AT = "last_action_at"
         private const val K_LAST_ACTION_REASON = "last_action_reason"
+        private const val K_LAST_STOP_REPORT = "last_stop_report"
 
         @Volatile
         private var instance: Prefs? = null

@@ -27,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
@@ -70,7 +71,7 @@ fun TimerScreen() {
     ) {
         ScreenHeader(
             if (active) "Đang hẹn giờ ngủ" else "Hẹn giờ ngủ",
-            if (active) "Hết giờ sẽ dừng mọi video, nhạc — trừ báo thức và app ngân hàng."
+            subtitle = if (active) "Hết giờ sẽ dừng mọi video, nhạc — trừ báo thức và app ngân hàng."
             else "Kéo quanh vòng để chọn 0–60 phút, rồi chạm Bắt đầu.",
         )
 
@@ -125,6 +126,15 @@ fun TimerScreen() {
                     style = MaterialTheme.typography.bodySmall,
                     color = Night.Mist.copy(alpha = 0.7f),
                 )
+                if (settings.lastStopReport.isNotBlank()) {
+                    Text(
+                        settings.lastStopReport,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Night.Mist.copy(alpha = 0.7f),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
             }
         }
     }

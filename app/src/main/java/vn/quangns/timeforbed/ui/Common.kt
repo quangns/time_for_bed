@@ -34,7 +34,7 @@ import vn.quangns.timeforbed.ui.theme.Night
 
 /** Tiêu đề màn: căn trái, kèm một dòng mô tả ngắn. */
 @Composable
-fun ScreenHeader(title: String, subtitle: String? = null, modifier: Modifier = Modifier) {
+fun ScreenHeader(title: String, modifier: Modifier = Modifier, subtitle: String? = null) {
     Column(modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp)) {
         Text(title, style = MaterialTheme.typography.headlineMedium)
         if (subtitle != null) {

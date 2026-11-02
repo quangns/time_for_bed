@@ -95,7 +95,7 @@ fun AlarmScreen() {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                ScreenHeader("Báo thức", "Chuông reo cả khi máy đang khóa. Hẹn giờ ngủ không bao giờ tắt báo thức.")
+                ScreenHeader("Báo thức", subtitle = "Chuông reo cả khi máy đang khóa. Hẹn giờ ngủ không bao giờ tắt báo thức.")
             }
             if (alarms.isEmpty()) {
                 item { EmptyAlarms() }

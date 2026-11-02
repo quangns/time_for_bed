@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.MaterialTheme
@@ -39,6 +40,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import vn.quangns.timeforbed.core.AppInfo
 import vn.quangns.timeforbed.core.Exclusions
+import vn.quangns.timeforbed.core.MediaKiller
 import vn.quangns.timeforbed.core.PermissionItem
 import vn.quangns.timeforbed.core.Permissions
 import vn.quangns.timeforbed.core.Prefs
@@ -55,6 +57,16 @@ fun SettingsScreen(refreshKey: Int) {
     val s by prefs.state.collectAsStateWithLifecycle()
     var apps by remember { mutableStateOf<List<AppInfo>?>(null) }
     var query by remember { mutableStateOf("") }
+    var diagnostic by remember { mutableStateOf<String?>(null) }
+    diagnostic?.let { text ->
+        AlertDialog(
+            onDismissRequest = { diagnostic = null },
+            containerColor = Night.Surface,
+            title = { Text("Trình phát đang mở") },
+            text = { Text(text, style = MaterialTheme.typography.bodyMedium) },
+            confirmButton = { TextButton(onClick = { diagnostic = null }) { Text("Đóng") } },
+        )
+    }
     LaunchedEffect(Unit) { apps = withContext(Dispatchers.IO) { Exclusions.launchableApps(context) } }
 
     val filtered = apps.orEmpty().filter {
@@ -66,7 +78,7 @@ fun SettingsScreen(refreshKey: Int) {
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        item { ScreenHeader("Cài đặt", "Quyền hệ thống và danh sách app không bao giờ bị tắt.") }
+        item { ScreenHeader("Cài đặt", subtitle = "Quyền hệ thống và danh sách app không bao giờ bị tắt.") }
         item {
             SectionCard("Quyền cần cấp", subtitle = "Bật lần lượt từng mục rồi quay lại app để cập nhật.") {
                 Permissions.applicable().forEachIndexed { i, p ->
@@ -74,6 +86,32 @@ fun SettingsScreen(refreshKey: Int) {
                     PermissionRow(p, granted = remember(refreshKey) { Permissions.isGranted(context, p) }) {
                         openSafely(context, Permissions.settingsIntent(context, p))
                     }
+                }
+            }
+        }
+        item {
+            SectionCard(
+                "Kiểm tra tắt media",
+                subtitle = "Mở video/nhạc ở app khác rồi quay lại đây để xem app có nhìn thấy trình phát không.",
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = { diagnostic = MediaKiller.describeSessions(context) },
+                        border = BorderStroke(1.dp, Night.Hairline),
+                        shape = MaterialTheme.shapes.medium,
+                    ) { Text("Xem trình phát", color = Night.Moonlight) }
+                    OutlinedButton(
+                        onClick = {
+                            MediaKiller.stopAll(context, "Thử từ Cài đặt", lockScreen = false)
+                            Toast.makeText(context, "Đang dừng, kết quả hiện sau ~4 giây", Toast.LENGTH_SHORT).show()
+                        },
+                        border = BorderStroke(1.dp, Night.Hairline),
+                        shape = MaterialTheme.shapes.medium,
+                    ) { Text("Thử dừng ngay", color = Night.Moonlight) }
+                }
+                if (s.lastStopReport.isNotBlank()) {
+                    Text("Lần dừng gần nhất", style = MaterialTheme.typography.labelMedium, color = Night.Mist, modifier = Modifier.padding(top = 14.dp))
+                    Text(s.lastStopReport, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
                 }
             }
         }

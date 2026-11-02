@@ -10,20 +10,27 @@ import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
+import android.view.KeyEvent
 import vn.quangns.timeforbed.alarm.AlarmRingService
 import vn.quangns.timeforbed.service.BedtimeAccessibilityService
 import vn.quangns.timeforbed.service.MediaNotificationListener
 
 /**
- * Dừng mọi trình phát video/âm thanh của app khác (trừ danh sách loại trừ) mà không cần root:
- * 1. pause/stop qua MediaSession (cần quyền Notification access);
- * 2. giành audio focus để app không dùng MediaSession tự dừng;
- * 3. về màn hình chính + khóa máy qua Accessibility (nếu bật).
+ * Dừng mọi trình phát video/âm thanh của app khác (trừ danh sách loại trừ) mà không cần root.
+ * Nhiều lớp, vì mỗi app phản ứng một kiểu:
+ * 1. pause qua MediaSession (cần quyền Truy cập thông báo);
+ * 2. phím media PAUSE gửi tới phiên phát gần nhất (không cần quyền);
+ * 3. giành audio focus để app tuân thủ focus tự dừng (trình duyệt, game…);
+ * 4. kiểm tra lại sau 1,5 s và 4 s: app nào còn phát thì pause + stop lần nữa;
+ * 5. về màn hình chính + khóa máy qua Accessibility — chốt chặn cho app phớt lờ mọi lệnh.
+ * Kết quả từng lần được ghi vào [Prefs.lastStopReport] để xem lại trong app.
  */
 object MediaKiller {
     private const val TAG = "MediaKiller"
     private val main = Handler(Looper.getMainLooper())
+    private val RETRY_DELAYS_MS = longArrayOf(1_500, 4_000)
 
     private val PLAYING_STATES = setOf(
         PlaybackState.STATE_PLAYING,
@@ -38,15 +45,18 @@ object MediaKiller {
 
     private fun MediaController.isPlaying() = playbackState?.state in PLAYING_STATES
 
-    fun activeControllers(context: Context): List<MediaController> {
+    /** null = chưa có quyền Truy cập thông báo (khác với "có quyền nhưng không có phiên nào"). */
+    fun activeControllersOrNull(context: Context): List<MediaController>? {
         val msm = context.getSystemService(MediaSessionManager::class.java) ?: return emptyList()
         return try {
             msm.getActiveSessions(ComponentName(context, MediaNotificationListener::class.java))
         } catch (e: SecurityException) {
-            Log.w(TAG, "Chưa cấp quyền Notification access", e)
-            emptyList()
+            Log.w(TAG, "Chưa cấp quyền Truy cập thông báo", e)
+            null
         }
     }
+
+    fun activeControllers(context: Context): List<MediaController> = activeControllersOrNull(context).orEmpty()
 
     /** Có báo thức (của app này hoặc app khác) đang reo không. */
     fun isAlarmRinging(context: Context): Boolean {
@@ -67,39 +77,92 @@ object MediaKiller {
         return am.isMusicActive && !isAlarmRinging(context)
     }
 
+    /** Mô tả các phiên phát hiện có, để hiển thị khi người dùng bấm "Kiểm tra". */
+    fun describeSessions(context: Context): String {
+        val controllers = activeControllersOrNull(context)
+            ?: return "Chưa có quyền Truy cập thông báo nên không thấy trình phát nào."
+        val am = context.getSystemService(AudioManager::class.java)
+        val lines = controllers.map { c ->
+            val state = stateName(c.playbackState?.state)
+            val tag = if (Exclusions.isExcluded(context, c.packageName)) " (không bao giờ tắt)" else ""
+            "• ${appLabel(context, c.packageName)}: $state$tag"
+        }
+        val music = if (am?.isMusicActive == true) "Có" else "Không"
+        return buildString {
+            append(if (lines.isEmpty()) "Không thấy phiên phát nào." else lines.joinToString("\n"))
+            append("\nĐang có âm thanh phát: ").append(music)
+            append("\nTrợ năng (về Home, khóa máy): ")
+            append(if (BedtimeAccessibilityService.instance != null) "đang chạy" else "chưa kết nối")
+        }
+    }
+
     /**
      * Dừng media. [lockScreen] = về Home + khóa máy sau khi dừng.
-     * Trả về danh sách gói đã bị dừng qua MediaSession.
+     * [onDone] được gọi sau lần kiểm tra cuối (~4 s) — receiver dùng để giữ tiến trình sống tới lúc đó.
+     * Trả về danh sách gói đã bị pause qua MediaSession ở lượt đầu.
      */
-    fun stopAll(context: Context, reason: String, lockScreen: Boolean): List<String> {
+    fun stopAll(context: Context, reason: String, lockScreen: Boolean, onDone: () -> Unit = {}): List<String> {
         val app = context.applicationContext
-        val targets = activeControllers(app).filter {
-            it.isPlaying() && !Exclusions.isExcluded(app, it.packageName)
-        }
-        targets.forEach { c ->
-            runCatching { c.transportControls.pause() }
-                .onFailure { Log.w(TAG, "pause ${c.packageName} lỗi", it) }
-        }
-        // Gọi stop sau một nhịp để app kịp xử lý pause (một số app bỏ qua stop khi đang phát).
-        main.postDelayed({
-            targets.forEach { c -> runCatching { c.transportControls.stop() } }
-        }, 600)
+        val prefs = Prefs.get(app)
+        val am = app.getSystemService(AudioManager::class.java)
+        val ringing = isAlarmRinging(app)
 
-        if (!isAlarmRinging(app)) grabAudioFocus(app)
+        val controllers = activeControllersOrNull(app)
+        val playing = controllers.orEmpty().filter { it.isPlaying() }
+        val targets = playing.filter { !Exclusions.isExcluded(app, it.packageName) }
+        val excludedPlaying = playing.any { Exclusions.isExcluded(app, it.packageName) }
+        val musicBefore = am?.isMusicActive == true
+
+        targets.forEach { pause(it) }
+
+        // Phím PAUSE đi tới phiên phát gần nhất; bỏ qua nếu app loại trừ đang phát hoặc báo thức đang reo
+        // để không lỡ dừng nhầm chúng.
+        val sendKey = !ringing && !excludedPlaying && (targets.isNotEmpty() || musicBefore)
+        if (sendKey && am != null) sendPauseKey(am)
+
+        val focus = if (!ringing && am != null) grabAudioFocus(am) else null
 
         if (lockScreen) {
-            main.postDelayed({ BedtimeAccessibilityService.instance?.goHomeAndLock() }, 300)
+            main.postDelayed({ BedtimeAccessibilityService.instance?.goHomeAndLock() }, 500)
+        }
+
+        // Kiểm tra lại: app nào vẫn phát thì pause + stop lần nữa.
+        RETRY_DELAYS_MS.forEachIndexed { i, delay ->
+            main.postDelayed({
+                val still = activeControllers(app).filter { it.isPlaying() && !Exclusions.isExcluded(app, it.packageName) }
+                still.forEach { pause(it); runCatching { it.transportControls.stop() } }
+                if (still.isNotEmpty() && !isAlarmRinging(app) && am != null) sendPauseKey(am)
+                if (i == RETRY_DELAYS_MS.lastIndex) {
+                    focus?.let { req -> runCatching { am?.abandonAudioFocusRequest(req) } }
+                    val musicAfter = am?.isMusicActive == true && !isAlarmRinging(app)
+                    prefs.recordStopReport(
+                        buildReport(app, controllers, targets, sendKey, focus != null, musicBefore, still, musicAfter, lockScreen),
+                    )
+                    onDone()
+                }
+            }, delay)
         }
 
         val pkgs = targets.map { it.packageName }.distinct()
-        Prefs.get(app).recordAction(reason)
-        Log.i(TAG, "stopAll($reason): $pkgs, lock=$lockScreen")
+        prefs.recordAction(reason)
+        Log.i(TAG, "stopAll($reason): sessions=${controllers?.size}, paused=$pkgs, key=$sendKey, lock=$lockScreen")
         return pkgs
     }
 
-    /** Xin audio focus vĩnh viễn rồi nhả ra: app tuân thủ focus sẽ dừng hẳn. */
-    private fun grabAudioFocus(context: Context) {
-        val am = context.getSystemService(AudioManager::class.java) ?: return
+    private fun pause(c: MediaController) {
+        runCatching { c.transportControls.pause() }.onFailure { Log.w(TAG, "pause ${c.packageName} lỗi", it) }
+    }
+
+    private fun sendPauseKey(am: AudioManager) {
+        val t = SystemClock.uptimeMillis()
+        runCatching {
+            am.dispatchMediaKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PAUSE, 0))
+            am.dispatchMediaKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PAUSE, 0))
+        }.onFailure { Log.w(TAG, "Gửi phím PAUSE lỗi", it) }
+    }
+
+    /** Xin audio focus vĩnh viễn (nhả ra sau lần kiểm tra cuối): app tuân thủ focus sẽ dừng hẳn. */
+    private fun grabAudioFocus(am: AudioManager): AudioFocusRequest? {
         val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
             .setAudioAttributes(
                 AudioAttributes.Builder()
@@ -109,7 +172,52 @@ object MediaKiller {
             )
             .setOnAudioFocusChangeListener { }
             .build()
-        runCatching { am.requestAudioFocus(request) }
-        main.postDelayed({ runCatching { am.abandonAudioFocusRequest(request) } }, 2_000)
+        val granted = runCatching { am.requestAudioFocus(request) }.getOrNull() == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        return if (granted) request else null
+    }
+
+    private fun buildReport(
+        context: Context,
+        controllers: List<MediaController>?,
+        targets: List<MediaController>,
+        sentKey: Boolean,
+        focusGranted: Boolean,
+        musicBefore: Boolean,
+        stillPlaying: List<MediaController>,
+        musicAfter: Boolean,
+        lockScreen: Boolean,
+    ): String = buildString {
+        if (controllers == null) {
+            append("Chưa có quyền Truy cập thông báo, không thấy được trình phát.\n")
+        } else {
+            append("Thấy ${controllers.size} phiên phát")
+            if (targets.isNotEmpty()) append(", đã dừng: ").append(targets.joinToString { appLabel(context, it.packageName) })
+            append(".\n")
+        }
+        if (targets.isEmpty() && musicBefore) append("Có âm thanh từ app không báo phiên phát.\n")
+        if (sentKey) append("Đã gửi phím Tạm dừng.\n")
+        append(if (focusGranted) "Đã giành quyền phát âm thanh.\n" else "Không giành được quyền phát âm thanh.\n")
+        if (lockScreen) {
+            append(if (BedtimeAccessibilityService.instance != null) "Đã về Home và khóa máy.\n" else "Trợ năng chưa kết nối nên không khóa được máy.\n")
+        }
+        when {
+            stillPlaying.isNotEmpty() -> append("Vẫn còn phát: ").append(stillPlaying.joinToString { appLabel(context, it.packageName) })
+            musicAfter -> append("Vẫn còn âm thanh sau 4 giây.")
+            else -> append("Sau 4 giây: đã im lặng.")
+        }
+    }
+
+    private fun appLabel(context: Context, pkg: String): String = runCatching {
+        val pm = context.packageManager
+        pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+    }.getOrDefault(pkg)
+
+    private fun stateName(state: Int?): String = when (state) {
+        PlaybackState.STATE_PLAYING -> "đang phát"
+        PlaybackState.STATE_PAUSED -> "tạm dừng"
+        PlaybackState.STATE_STOPPED -> "đã dừng"
+        PlaybackState.STATE_BUFFERING, PlaybackState.STATE_CONNECTING -> "đang tải"
+        null -> "không rõ"
+        else -> "trạng thái $state"
     }
 }
