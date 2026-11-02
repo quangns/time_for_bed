@@ -26,7 +26,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import vn.quangns.timeforbed.core.Permissions
 import vn.quangns.timeforbed.core.Prefs
@@ -63,10 +66,13 @@ fun NightScreen() {
     var idle by remember(s.idleMinutes) { mutableFloatStateOf(s.idleMinutes.toFloat()) }
 
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            now = System.currentTimeMillis()
-            delay(5_000)
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                now = System.currentTimeMillis()
+                delay(30_000) // chỉ để cập nhật dòng "thao tác gần nhất"; dừng khi app xuống nền
+            }
         }
     }
     val lastInteraction by BedtimeAccessibilityService.lastInteraction.collectAsStateWithLifecycle()
@@ -81,7 +87,7 @@ fun NightScreen() {
         ScreenHeader(
             "Ban đêm",
             subtitle = "Ngủ quên khi đang xem? Quá ${s.idleMinutes} phút không chạm vào máy trong khung giờ này, " +
-                "app sẽ tắt video, nhạc. Báo trước 1 phút.",
+                "app sẽ tạm dừng video, nhạc rồi khóa màn hình. Báo trước 1 phút.",
         )
 
         // Trạng thái: một dòng, chấm xanh = đang theo dõi, chấm cam = cần xử lý.
@@ -139,15 +145,6 @@ fun NightScreen() {
                         inactiveTrackColor = Night.Raised,
                     ),
                 )
-            }
-        }
-
-        SectionCard("Sau khi tắt") {
-            SettingRow(
-                "Về màn hình chính và khóa máy",
-                description = "Áp dụng cả cho hẹn giờ ngủ. Bỏ qua nếu đang mở app ngân hàng.",
-            ) {
-                NightSwitch(checked = s.lockAfterStop, onCheckedChange = { prefs.lockAfterStop = it })
             }
         }
     }

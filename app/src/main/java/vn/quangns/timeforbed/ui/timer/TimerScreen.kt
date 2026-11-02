@@ -29,7 +29,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import vn.quangns.timeforbed.core.MediaKiller
 import vn.quangns.timeforbed.core.Prefs
@@ -50,11 +53,15 @@ fun TimerScreen() {
     var deadline by remember { mutableLongStateOf(prefs.timerDeadline) }
     LaunchedEffect(settings.timerDeadline) { deadline = settings.timerDeadline }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            now = System.currentTimeMillis()
-            deadline = prefs.timerDeadline // đồng bộ khi bấm +10 phút / Hủy từ thông báo
-            delay(1_000 - now % 1_000) // canh đầu mỗi giây để đếm ngược không nhảy cóc
+    // Chỉ đếm từng giây khi màn hình này đang hiện; app xuống nền thì dừng hẳn (tiết kiệm pin).
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                now = System.currentTimeMillis()
+                deadline = prefs.timerDeadline // đồng bộ khi bấm +10 phút / Hủy từ thông báo
+                delay(1_000 - now % 1_000) // canh đầu mỗi giây để đếm ngược không nhảy cóc
+            }
         }
     }
     val active = deadline > now
@@ -71,7 +78,7 @@ fun TimerScreen() {
     ) {
         ScreenHeader(
             if (active) "Đang hẹn giờ ngủ" else "Hẹn giờ ngủ",
-            subtitle = if (active) "Hết giờ sẽ dừng mọi video, nhạc — trừ báo thức và app ngân hàng."
+            subtitle = if (active) "Hết giờ sẽ tạm dừng video, nhạc rồi khóa màn hình — không đụng tới báo thức, app ngân hàng."
             else "Kéo quanh vòng để chọn 0–60 phút, rồi chạm Bắt đầu.",
         )
 

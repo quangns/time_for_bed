@@ -18,16 +18,14 @@ import vn.quangns.timeforbed.service.BedtimeAccessibilityService
 import vn.quangns.timeforbed.service.MediaNotificationListener
 
 /**
- * Dừng mọi trình phát video/âm thanh của app khác (trừ danh sách loại trừ) mà không cần root.
- * Nhiều lớp, vì mỗi app phản ứng một kiểu:
- * 1. pause qua MediaSession (cần quyền Truy cập thông báo);
- * 2. phím media PAUSE gửi tới phiên phát gần nhất (không cần quyền);
- * 3. giành audio focus để app tuân thủ focus tự dừng (trình duyệt, game…);
- * 4. sau 1,5 s: app nào còn phát thì pause + stop lần nữa; vẫn còn tiếng thì về màn hình chính
- *    (app video như TikTok tự dừng khi bị đẩy xuống nền);
- * 5. sau 4 s: vẫn còn tiếng thì tắt tiếng luồng media ([MediaVolume]) — áp dụng cho mọi app;
- * kèm tùy chọn về màn hình chính + khóa máy ngay từ đầu.
- * Kết quả từng lần được ghi vào [Prefs.lastStopReport] để xem lại trong app.
+ * Tạm dừng mọi trình phát video/âm thanh của app khác (trừ danh sách loại trừ) rồi khóa màn hình —
+ * không cần root, **không đụng tới âm lượng** (để không ảnh hưởng chuông báo thức).
+ * 1. pause qua MediaSession (cần quyền Truy cập thông báo) — YouTube, Spotify, Zing MP3…;
+ * 2. phím media PAUSE tới phiên phát gần nhất + giành audio focus;
+ * 3. về màn hình chính rồi khóa máy qua Accessibility: app video không báo trình phát (TikTok…)
+ *    tự dừng khi bị đẩy xuống nền; khóa màn hình để tiết kiệm pin;
+ * 4. kiểm tra lại sau 1,5 s và 4 s: còn phát thì pause lần nữa, chưa khóa được thì thử lại.
+ * Kết quả ghi vào [Prefs.lastStopReport] để xem lại trong app.
  */
 object MediaKiller {
     private const val TAG = "MediaKiller"
@@ -124,34 +122,24 @@ object MediaKiller {
 
         val focus = if (!ringing && am != null) grabAudioFocus(am) else null
 
+        // Về màn hình chính + khóa máy sau một nhịp để lệnh pause kịp tới các app.
+        var locked = false
         if (lockScreen) {
-            main.postDelayed({ BedtimeAccessibilityService.instance?.goHomeAndLock() }, 500)
+            main.postDelayed({ locked = BedtimeAccessibilityService.instance?.goHomeAndLock() == true }, 500)
         }
 
-        // Kiểm tra lại và leo thang cho tới khi im lặng.
-        val steps = mutableListOf<String>()
+        // Kiểm tra lại: app nào còn phát thì pause lần nữa; chưa khóa được (Trợ năng vừa kết nối lại) thì thử lại.
         RETRY_DELAYS_MS.forEachIndexed { i, delay ->
             main.postDelayed({
-                val sessions = activeControllers(app).filter { it.isPlaying() }
-                val still = sessions.filter { !Exclusions.isExcluded(app, it.packageName) }
+                val still = activeControllers(app).filter { it.isPlaying() && !Exclusions.isExcluded(app, it.packageName) }
                 still.forEach { pause(it); runCatching { it.transportControls.stop() } }
-                val ringingNow = isAlarmRinging(app)
-                if (still.isNotEmpty() && !ringingNow && am != null) sendPauseKey(am)
-                // Còn tiếng từ app không thuộc danh sách loại trừ?
-                val excludedAudible = sessions.any { Exclusions.isExcluded(app, it.packageName) } ||
-                    BedtimeAccessibilityService.instance?.foregroundExcluded() == true
-                val audible = !ringingNow && (still.isNotEmpty() || (am?.isMusicActive == true && !excludedAudible))
-                if (i == 0) {
-                    if (audible && !lockScreen && BedtimeAccessibilityService.instance?.goHome() == true) {
-                        steps += "Còn tiếng sau 1,5 giây: đã về màn hình chính."
-                    }
-                } else {
+                if (still.isNotEmpty() && !isAlarmRinging(app) && am != null) sendPauseKey(am)
+                if (lockScreen && !locked) locked = BedtimeAccessibilityService.instance?.goHomeAndLock() == true
+                if (i == RETRY_DELAYS_MS.lastIndex) {
                     focus?.let { req -> runCatching { am?.abandonAudioFocusRequest(req) } }
-                    if (audible && MediaVolume.mute(app)) {
-                        steps += "Còn tiếng sau 4 giây: đã tắt tiếng media (tự bật lại khi mở khóa máy)."
-                    }
+                    val audible = !isAlarmRinging(app) && (still.isNotEmpty() || am?.isMusicActive == true)
                     prefs.recordStopReport(
-                        buildReport(app, controllers, targets, sendKey, focus != null, musicBefore, lockScreen, steps, audible),
+                        buildReport(app, controllers, targets, sendKey, lockScreen, locked, still, audible),
                     )
                     onDone()
                 }
@@ -196,27 +184,35 @@ object MediaKiller {
         controllers: List<MediaController>?,
         targets: List<MediaController>,
         sentKey: Boolean,
-        focusGranted: Boolean,
-        musicBefore: Boolean,
         lockScreen: Boolean,
-        steps: List<String>,
-        audibleAt4s: Boolean,
+        locked: Boolean,
+        stillPlaying: List<MediaController>,
+        audible: Boolean,
     ): String = buildString {
         if (controllers == null) {
             append("Chưa có quyền Truy cập thông báo, không thấy được trình phát.\n")
         } else {
             append("Thấy ${controllers.size} phiên phát")
-            if (targets.isNotEmpty()) append(", đã dừng: ").append(targets.joinToString { appLabel(context, it.packageName) })
+            if (targets.isNotEmpty()) append(", đã tạm dừng: ").append(targets.joinToString { appLabel(context, it.packageName) })
             append(".\n")
         }
-        if (targets.isEmpty() && musicBefore) append("Có âm thanh từ app không báo phiên phát.\n")
         if (sentKey) append("Đã gửi phím Tạm dừng.\n")
-        append(if (focusGranted) "Đã giành quyền phát âm thanh.\n" else "Không giành được quyền phát âm thanh.\n")
         if (lockScreen) {
-            append(if (BedtimeAccessibilityService.instance != null) "Đã về Home và khóa máy.\n" else "Trợ năng chưa kết nối nên không khóa được máy.\n")
+            append(
+                when {
+                    locked -> "Đã về màn hình chính và khóa máy.\n"
+                    BedtimeAccessibilityService.instance == null -> "Trợ năng chưa kết nối nên chưa khóa được máy.\n"
+                    else -> "Đang mở app không bao giờ tắt nên không khóa máy.\n"
+                },
+            )
         }
-        steps.forEach { append(it).append('\n') }
-        append(if (audibleAt4s && steps.none { it.contains("tắt tiếng") }) "Vẫn còn âm thanh sau 4 giây." else "Kết quả: đã im lặng.")
+        when {
+            stillPlaying.isNotEmpty() ->
+                append("Vẫn còn phát: ").append(stillPlaying.joinToString { appLabel(context, it.packageName) })
+            audible ->
+                append("Vẫn còn âm thanh từ một app chạy nền — tắt \"phát nền\" trong app đó.")
+            else -> append("Kết quả: đã im lặng.")
+        }
     }
 
     private fun appLabel(context: Context, pkg: String): String = runCatching {

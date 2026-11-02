@@ -22,7 +22,7 @@ class TimerReceiver : BroadcastReceiver() {
                 SleepTimer.cancel(context)
                 // Giữ tiến trình sống tới lần kiểm tra cuối (~4 s), kể cả khi app đang ở nền/đã bị đóng.
                 val pending = goAsync()
-                MediaKiller.stopAll(context, reason = "Hết giờ hẹn ngủ", lockScreen = prefs.lockAfterStop) {
+                MediaKiller.stopAll(context, reason = "Hết giờ hẹn ngủ", lockScreen = true) {
                     pending?.finish()
                 }
             }

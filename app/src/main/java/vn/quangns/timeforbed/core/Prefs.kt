@@ -13,7 +13,6 @@ data class Settings(
     val nightStart: Int,
     val nightEnd: Int,
     val idleMinutes: Int,
-    val lockAfterStop: Boolean,
     val timerDeadline: Long,
     val lastTimerMinutes: Int,
     val excluded: Set<String>,
@@ -59,10 +58,6 @@ class Prefs private constructor(context: Context) {
         get() = sp.getInt(K_IDLE, 30)
         set(v) = sp.edit { putInt(K_IDLE, v) }
 
-    var lockAfterStop: Boolean
-        get() = sp.getBoolean(K_LOCK, true)
-        set(v) = sp.edit { putBoolean(K_LOCK, v) }
-
     /** Epoch millis hết giờ hẹn ngủ; 0 = không hẹn. */
     var timerDeadline: Long
         get() = sp.getLong(K_TIMER_DEADLINE, 0L)
@@ -97,7 +92,6 @@ class Prefs private constructor(context: Context) {
         nightStart = nightStart,
         nightEnd = nightEnd,
         idleMinutes = idleMinutes,
-        lockAfterStop = lockAfterStop,
         timerDeadline = timerDeadline,
         lastTimerMinutes = lastTimerMinutes,
         excluded = excluded,
@@ -111,7 +105,6 @@ class Prefs private constructor(context: Context) {
         private const val K_NIGHT_START = "night_start"
         private const val K_NIGHT_END = "night_end"
         private const val K_IDLE = "idle_minutes"
-        private const val K_LOCK = "lock_after_stop"
         private const val K_TIMER_DEADLINE = "timer_deadline"
         private const val K_TIMER_LAST = "timer_last_minutes"
         private const val K_EXCLUDED = "excluded_packages"

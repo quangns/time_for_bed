@@ -2,6 +2,7 @@ package vn.quangns.timeforbed
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import vn.quangns.timeforbed.core.Exclusions
@@ -73,4 +74,41 @@ class NightRulesTest {
         assertFalse(Exclusions.looksLikeFinance("com.spotify.music", "Spotify"))
         assertFalse(Exclusions.looksLikeFinance("com.android.vending", "Google Play Store"))
     }
+
+    // --- Lịch kiểm tra (tiết kiệm pin) ---
+    private fun next(
+        minuteOfDay: Int = 60,
+        msIntoMinute: Long = 0,
+        idleMs: Long = 0,
+        screenOn: Boolean = true,
+        media: Boolean = false,
+        enabled: Boolean = true,
+    ) = NightRules.nextCheckDelayMs(enabled, minuteOfDay, msIntoMinute, 0, 360, idleMs, threshold, screenOn, media)
+
+    @Test
+    fun noSchedule_whenDisabled() = assertNull(next(enabled = false))
+
+    @Test
+    fun outsideWindow_wakesAtWindowStart() {
+        // 22:30 → 00:00 là 90 phút; đang ở giây thứ 15 của phút.
+        assertEquals(90 * min - 15_000, next(minuteOfDay = 22 * 60 + 30, msIntoMinute = 15_000))
+        // 06:00 (vừa hết khung) → 18 giờ sau.
+        assertEquals(18 * 60 * min, next(minuteOfDay = 6 * 60))
+    }
+
+    @Test
+    fun screenOffAndSilent_waitsForEvent() = assertNull(next(screenOn = false, media = false))
+
+    @Test
+    fun sleepsUntilWarningPoint() {
+        // Mới chạm 5 phút trước, ngưỡng 30 → kiểm tra lại sau 24 phút (mốc cảnh báo 29 phút).
+        assertEquals(24 * min, next(idleMs = 5 * min))
+        // Đang trong phút cảnh báo → đúng lúc hết ngưỡng.
+        assertEquals(20_000L, next(idleMs = 29 * min + 40_000))
+        // Đã quá ngưỡng (vd đang mở app ngân hàng) → thưa, 60 giây một lần.
+        assertEquals(60_000L, next(idleMs = 45 * min))
+    }
+
+    @Test
+    fun audioWithScreenOff_stillScheduled() = assertEquals(24 * min, next(idleMs = 5 * min, screenOn = false, media = true))
 }

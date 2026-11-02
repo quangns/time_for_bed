@@ -38,6 +38,42 @@ enum class NightAction { NONE, WARN, STOP }
 /** Quyết định của chế độ ban đêm cho một lần kiểm tra. */
 object NightRules {
     const val WARN_BEFORE_MS = 60_000L
+    private const val MIN_CHECK_MS = 5_000L
+    private const val IDLE_RECHECK_MS = 60_000L
+
+    /**
+     * Bao lâu nữa mới cần kiểm tra lại — để không đánh thức máy vô ích (tiết kiệm pin).
+     * null = không hẹn giờ, chờ sự kiện (bật màn hình, có âm thanh phát, đổi cài đặt).
+     * - Tắt chế độ ban đêm → null.
+     * - Ngoài khung giờ → đúng lúc khung giờ bắt đầu.
+     * - Màn hình tắt và không có gì phát → null.
+     * - Còn lại → đúng lúc tới mốc cảnh báo / mốc tắt; đã quá ngưỡng thì 60 s một lần.
+     */
+    fun nextCheckDelayMs(
+        enabled: Boolean,
+        minuteOfDay: Int,
+        msIntoMinute: Long,
+        start: Int,
+        end: Int,
+        idleMs: Long,
+        thresholdMs: Long,
+        screenOn: Boolean,
+        mediaPlaying: Boolean,
+    ): Long? {
+        if (!enabled) return null
+        if (!TimeRules.inWindow(start, end, minuteOfDay)) {
+            val minutes = ((start - minuteOfDay) % 1440 + 1440) % 1440
+            return (minutes * 60_000L - msIntoMinute).coerceAtLeast(MIN_CHECK_MS)
+        }
+        if (!screenOn && !mediaPlaying) return null
+        val warnAt = thresholdMs - WARN_BEFORE_MS
+        val delay = when {
+            idleMs < warnAt -> warnAt - idleMs
+            idleMs < thresholdMs -> thresholdMs - idleMs
+            else -> IDLE_RECHECK_MS
+        }
+        return delay.coerceAtLeast(MIN_CHECK_MS)
+    }
 
     fun decide(
         enabled: Boolean,

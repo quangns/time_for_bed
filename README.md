@@ -32,22 +32,26 @@ Giao diện theo [DESIGN.md](DESIGN.md) — phong cách "nửa đêm tĩnh lặn
 
 ## Cách hoạt động (không root)
 
-Dừng nhiều lớp, leo thang cho tới khi im lặng — áp dụng cho **mọi app**, không theo danh sách định trước:
+Khi hết giờ (hoặc ngủ quên trong khung giờ đêm) app **tạm dừng mọi app đang phát rồi khóa màn hình** —
+áp dụng cho mọi app, **không thay đổi âm lượng** (để không ảnh hưởng chuông báo thức):
 
 1. **MediaSession** (cần quyền Truy cập thông báo): gửi `pause` cho mọi phiên đang phát (YouTube, Spotify, Zing MP3…).
 2. **Phím Tạm dừng** gửi tới phiên phát gần nhất, và **giành audio focus** để app tuân thủ focus tự dừng.
-3. **Sau 1,5 giây** còn tiếng → về màn hình chính qua Accessibility: app video không báo trình phát (TikTok, Facebook, trình duyệt…) tự dừng khi bị đẩy xuống nền. Nếu bật *Về màn hình chính và khóa máy* thì làm ngay từ đầu.
-4. **Sau 4 giây** vẫn còn tiếng → **tắt tiếng luồng media** của hệ thống (chuông báo thức dùng luồng riêng nên vẫn reo). Âm lượng tự trả lại khi mở khóa máy, hoặc bấm *Bật lại âm thanh* trên thông báo.
+3. **Về màn hình chính rồi khóa máy** qua Accessibility: app video không báo trình phát (TikTok, Facebook, trình duyệt…) tự dừng khi bị đẩy xuống nền; tắt màn hình để tiết kiệm pin.
+4. Kiểm tra lại sau 1,5 và 4 giây: còn phát thì tạm dừng lần nữa; chưa khóa được thì thử lại.
 
 Không đụng tới app đồng hồ/báo thức và app trong danh sách loại trừ (ngân hàng…). Mỗi lần dừng có báo cáo ở màn Hẹn giờ; *Cài đặt → Kiểm tra tắt media* để xem app nhìn thấy trình phát nào.
 
-4. **Theo dõi thao tác**: Accessibility service chỉ ghi nhận *thời điểm* chạm/cuộn/gõ phím/mở khóa — không đọc nội dung màn hình (`canRetrieveWindowContent=false`). Mỗi 30 giây kiểm tra: đang trong khung giờ + quá ngưỡng + (có media đang phát hoặc màn hình đang bật) → tắt.
-5. Báo thức dùng `AlarmManager.setAlarmClock()` và phát chuông trên luồng **ALARM**, nên không bị chính app tắt.
+**Theo dõi thao tác**: Accessibility service chỉ ghi nhận *thời điểm* chạm/cuộn/gõ phím/mở khóa — không đọc nội dung màn hình (`canRetrieveWindowContent=false`).
+
+**Tiết kiệm pin**: không kiểm tra định kỳ. Mỗi lần kiểm tra xong app tính sẵn lần kế tiếp — ngoài khung giờ thì ngủ tới giờ bắt đầu; trong khung giờ thì thức đúng mốc cảnh báo/mốc tắt; màn hình tắt và không có gì phát thì ngừng hẳn, chỉ thức dậy khi bật màn hình, mở khóa hoặc có âm thanh phát. Đồng hồ đếm trên giao diện dừng khi app xuống nền.
+
+Báo thức dùng `AlarmManager.setAlarmClock()` và phát chuông trên luồng **ALARM**, nên không bị chính app tắt.
 
 ### Giới hạn
 
-- Bước tắt tiếng media là chốt chặn cuối; nếu một app loại trừ (ngân hàng) đang hiện trên màn hình thì app không tắt tiếng.
-- Không bật Trợ năng thì không về màn hình chính / khóa máy được, chỉ còn bước tắt tiếng.
+- TikTok/app tương tự: tắt *phát nền* trong app đó thì khi bị đưa về màn hình chính âm thanh sẽ dừng. Nếu app vẫn phát nền, báo cáo sẽ ghi *Vẫn còn âm thanh từ một app chạy nền*.
+- Không bật Trợ năng thì không về màn hình chính / khóa máy được; đang mở app loại trừ (ngân hàng) thì không khóa máy.
 - Android 8.x không có lệnh khóa máy qua Accessibility → chỉ về màn hình chính.
 - Một số ROM có thể tự tắt Accessibility sau khi cập nhật/khởi động lại — app hiện cảnh báo đỏ khi thiếu quyền.
 
