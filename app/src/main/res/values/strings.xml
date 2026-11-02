@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Time for Bed</string>
+    <string name="accessibility_label">Time for Bed – theo dõi thao tác</string>
+    <string name="accessibility_description">Ghi nhận thời điểm bạn chạm/thao tác lần cuối để tự tắt video, nhạc khi bạn ngủ quên trong khung giờ đêm; đồng thời đưa về màn hình chính và khóa máy sau khi tắt. App không đọc hay lưu nội dung màn hình.</string>
+</resources>
