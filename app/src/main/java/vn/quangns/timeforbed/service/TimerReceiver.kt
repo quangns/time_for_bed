@@ -8,6 +8,7 @@ import android.content.Intent
 import androidx.core.app.NotificationCompat
 import vn.quangns.timeforbed.R
 import vn.quangns.timeforbed.core.MediaKiller
+import vn.quangns.timeforbed.core.MediaVolume
 import vn.quangns.timeforbed.core.Notifications
 import vn.quangns.timeforbed.core.Prefs
 
@@ -28,6 +29,7 @@ class TimerReceiver : BroadcastReceiver() {
             ACTION_WARN -> if (Prefs.get(context).timerDeadline != 0L) showWarning(context)
             ACTION_EXTEND -> SleepTimer.extend(context)
             ACTION_CANCEL -> SleepTimer.cancel(context)
+            ACTION_RESTORE_VOLUME -> MediaVolume.restore(context)
         }
     }
 
@@ -53,6 +55,7 @@ class TimerReceiver : BroadcastReceiver() {
         const val ACTION_WARN = "vn.quangns.timeforbed.TIMER_WARN"
         const val ACTION_EXTEND = "vn.quangns.timeforbed.TIMER_EXTEND"
         const val ACTION_CANCEL = "vn.quangns.timeforbed.TIMER_CANCEL"
+        const val ACTION_RESTORE_VOLUME = "vn.quangns.timeforbed.RESTORE_VOLUME"
 
         fun actionIntent(context: Context, action: String): PendingIntent =
             PendingIntent.getBroadcast(

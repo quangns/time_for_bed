@@ -22,6 +22,7 @@ import vn.quangns.timeforbed.MainActivity
 import vn.quangns.timeforbed.R
 import vn.quangns.timeforbed.core.Exclusions
 import vn.quangns.timeforbed.core.MediaKiller
+import vn.quangns.timeforbed.core.MediaVolume
 import vn.quangns.timeforbed.core.NightAction
 import vn.quangns.timeforbed.core.NightRules
 import vn.quangns.timeforbed.core.Notifications
@@ -47,7 +48,10 @@ class BedtimeAccessibilityService : AccessibilityService() {
 
     private val unlockReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == Intent.ACTION_USER_PRESENT) markInteraction()
+            if (intent.action == Intent.ACTION_USER_PRESENT) {
+                markInteraction()
+                MediaVolume.restore(context) // đã thức dậy mở máy: trả lại âm lượng media
+            }
         }
     }
 
@@ -131,6 +135,15 @@ class BedtimeAccessibilityService : AccessibilityService() {
                 _lastInteraction.value = now
             }
         }
+    }
+
+    /** App đang hiện trên màn hình có thuộc danh sách loại trừ không (null = chưa biết). */
+    fun foregroundExcluded(): Boolean? = foregroundPackage?.let { Exclusions.isExcluded(this, it) }
+
+    /** Về màn hình chính (app video bị đẩy xuống nền sẽ tự dừng), trừ khi đang mở app loại trừ. */
+    fun goHome(): Boolean {
+        if (Exclusions.isExcluded(this, foregroundPackage)) return false
+        return performGlobalAction(GLOBAL_ACTION_HOME)
     }
 
     /** Về màn hình chính rồi khóa máy, trừ khi đang mở app loại trừ (ngân hàng…). */

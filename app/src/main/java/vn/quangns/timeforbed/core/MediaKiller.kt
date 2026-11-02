@@ -23,8 +23,10 @@ import vn.quangns.timeforbed.service.MediaNotificationListener
  * 1. pause qua MediaSession (cần quyền Truy cập thông báo);
  * 2. phím media PAUSE gửi tới phiên phát gần nhất (không cần quyền);
  * 3. giành audio focus để app tuân thủ focus tự dừng (trình duyệt, game…);
- * 4. kiểm tra lại sau 1,5 s và 4 s: app nào còn phát thì pause + stop lần nữa;
- * 5. về màn hình chính + khóa máy qua Accessibility — chốt chặn cho app phớt lờ mọi lệnh.
+ * 4. sau 1,5 s: app nào còn phát thì pause + stop lần nữa; vẫn còn tiếng thì về màn hình chính
+ *    (app video như TikTok tự dừng khi bị đẩy xuống nền);
+ * 5. sau 4 s: vẫn còn tiếng thì tắt tiếng luồng media ([MediaVolume]) — áp dụng cho mọi app;
+ * kèm tùy chọn về màn hình chính + khóa máy ngay từ đầu.
  * Kết quả từng lần được ghi vào [Prefs.lastStopReport] để xem lại trong app.
  */
 object MediaKiller {
@@ -126,17 +128,30 @@ object MediaKiller {
             main.postDelayed({ BedtimeAccessibilityService.instance?.goHomeAndLock() }, 500)
         }
 
-        // Kiểm tra lại: app nào vẫn phát thì pause + stop lần nữa.
+        // Kiểm tra lại và leo thang cho tới khi im lặng.
+        val steps = mutableListOf<String>()
         RETRY_DELAYS_MS.forEachIndexed { i, delay ->
             main.postDelayed({
-                val still = activeControllers(app).filter { it.isPlaying() && !Exclusions.isExcluded(app, it.packageName) }
+                val sessions = activeControllers(app).filter { it.isPlaying() }
+                val still = sessions.filter { !Exclusions.isExcluded(app, it.packageName) }
                 still.forEach { pause(it); runCatching { it.transportControls.stop() } }
-                if (still.isNotEmpty() && !isAlarmRinging(app) && am != null) sendPauseKey(am)
-                if (i == RETRY_DELAYS_MS.lastIndex) {
+                val ringingNow = isAlarmRinging(app)
+                if (still.isNotEmpty() && !ringingNow && am != null) sendPauseKey(am)
+                // Còn tiếng từ app không thuộc danh sách loại trừ?
+                val excludedAudible = sessions.any { Exclusions.isExcluded(app, it.packageName) } ||
+                    BedtimeAccessibilityService.instance?.foregroundExcluded() == true
+                val audible = !ringingNow && (still.isNotEmpty() || (am?.isMusicActive == true && !excludedAudible))
+                if (i == 0) {
+                    if (audible && !lockScreen && BedtimeAccessibilityService.instance?.goHome() == true) {
+                        steps += "Còn tiếng sau 1,5 giây: đã về màn hình chính."
+                    }
+                } else {
                     focus?.let { req -> runCatching { am?.abandonAudioFocusRequest(req) } }
-                    val musicAfter = am?.isMusicActive == true && !isAlarmRinging(app)
+                    if (audible && MediaVolume.mute(app)) {
+                        steps += "Còn tiếng sau 4 giây: đã tắt tiếng media (tự bật lại khi mở khóa máy)."
+                    }
                     prefs.recordStopReport(
-                        buildReport(app, controllers, targets, sendKey, focus != null, musicBefore, still, musicAfter, lockScreen),
+                        buildReport(app, controllers, targets, sendKey, focus != null, musicBefore, lockScreen, steps, audible),
                     )
                     onDone()
                 }
@@ -183,9 +198,9 @@ object MediaKiller {
         sentKey: Boolean,
         focusGranted: Boolean,
         musicBefore: Boolean,
-        stillPlaying: List<MediaController>,
-        musicAfter: Boolean,
         lockScreen: Boolean,
+        steps: List<String>,
+        audibleAt4s: Boolean,
     ): String = buildString {
         if (controllers == null) {
             append("Chưa có quyền Truy cập thông báo, không thấy được trình phát.\n")
@@ -200,11 +215,8 @@ object MediaKiller {
         if (lockScreen) {
             append(if (BedtimeAccessibilityService.instance != null) "Đã về Home và khóa máy.\n" else "Trợ năng chưa kết nối nên không khóa được máy.\n")
         }
-        when {
-            stillPlaying.isNotEmpty() -> append("Vẫn còn phát: ").append(stillPlaying.joinToString { appLabel(context, it.packageName) })
-            musicAfter -> append("Vẫn còn âm thanh sau 4 giây.")
-            else -> append("Sau 4 giây: đã im lặng.")
-        }
+        steps.forEach { append(it).append('\n') }
+        append(if (audibleAt4s && steps.none { it.contains("tắt tiếng") }) "Vẫn còn âm thanh sau 4 giây." else "Kết quả: đã im lặng.")
     }
 
     private fun appLabel(context: Context, pkg: String): String = runCatching {

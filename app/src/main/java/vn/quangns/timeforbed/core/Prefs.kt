@@ -85,6 +85,11 @@ class Prefs private constructor(context: Context) {
         putString(K_LAST_ACTION_REASON, reason)
     }
 
+    /** Âm lượng media trước khi app tắt tiếng; 0 = không tắt. */
+    var mutedPrevVolume: Int
+        get() = sp.getInt(K_MUTED_PREV, 0)
+        set(v) = sp.edit { putInt(K_MUTED_PREV, v) }
+
     fun recordStopReport(report: String) = sp.edit { putString(K_LAST_STOP_REPORT, report) }
 
     private fun read() = Settings(
@@ -114,6 +119,7 @@ class Prefs private constructor(context: Context) {
         private const val K_LAST_ACTION_AT = "last_action_at"
         private const val K_LAST_ACTION_REASON = "last_action_reason"
         private const val K_LAST_STOP_REPORT = "last_stop_report"
+        private const val K_MUTED_PREV = "muted_prev_volume"
 
         @Volatile
         private var instance: Prefs? = null

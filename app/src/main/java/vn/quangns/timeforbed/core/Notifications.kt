@@ -13,6 +13,7 @@ object Notifications {
     const val ID_TIMER_WARNING = 1002
     const val ID_NIGHT_WARNING = 1003
     const val ID_ALARM_RING = 1004
+    const val ID_MUTED = 1005
 
     fun createChannels(context: Context) {
         val nm = context.getSystemService(NotificationManager::class.java)
