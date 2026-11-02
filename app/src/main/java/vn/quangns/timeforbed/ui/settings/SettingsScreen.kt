@@ -4,6 +4,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -16,16 +17,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,7 +42,11 @@ import vn.quangns.timeforbed.core.Exclusions
 import vn.quangns.timeforbed.core.PermissionItem
 import vn.quangns.timeforbed.core.Permissions
 import vn.quangns.timeforbed.core.Prefs
+import vn.quangns.timeforbed.ui.Hairline
+import vn.quangns.timeforbed.ui.ScreenHeader
 import vn.quangns.timeforbed.ui.SectionCard
+import vn.quangns.timeforbed.ui.StatusDot
+import vn.quangns.timeforbed.ui.theme.Night
 
 @Composable
 fun SettingsScreen(refreshKey: Int) {
@@ -61,12 +63,14 @@ fun SettingsScreen(refreshKey: Int) {
 
     LazyColumn(
         Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
+        item { ScreenHeader("Cài đặt", "Quyền hệ thống và danh sách app không bao giờ bị tắt.") }
         item {
-            SectionCard("Quyền cần cấp", subtitle = "Bật lần lượt từng mục; quay lại app để cập nhật trạng thái") {
-                Permissions.applicable().forEach { p ->
+            SectionCard("Quyền cần cấp", subtitle = "Bật lần lượt từng mục rồi quay lại app để cập nhật.") {
+                Permissions.applicable().forEachIndexed { i, p ->
+                    if (i > 0) Hairline()
                     PermissionRow(p, granted = remember(refreshKey) { Permissions.isGranted(context, p) }) {
                         openSafely(context, Permissions.settingsIntent(context, p))
                     }
@@ -81,9 +85,10 @@ fun SettingsScreen(refreshKey: Int) {
                         "Xiaomi/Oppo/Vivo/Realme: bật \"Tự khởi chạy\", đặt Pin = \"Không hạn chế\" và " +
                         "khóa app trong màn hình đa nhiệm để app không bị tắt qua đêm.",
                     style = MaterialTheme.typography.bodySmall,
+                    color = Night.Mist,
                 )
                 TextButton(onClick = { openSafely(context, Permissions.appDetailsIntent(context)) }) {
-                    Text("Mở Thông tin ứng dụng")
+                    Text("Mở Thông tin ứng dụng", color = Night.Green)
                 }
             }
         }
@@ -93,13 +98,16 @@ fun SettingsScreen(refreshKey: Int) {
                 subtitle = "App đồng hồ/báo thức luôn được bỏ qua. Tick thêm app ngân hàng, ví điện tử…",
             ) {
                 Row {
-                    OutlinedButton(onClick = {
-                        val added = Exclusions.suggestFinance(context)
-                        prefs.excluded = prefs.excluded + added
-                        Toast.makeText(context, "Đã thêm ${added.size} app gợi ý", Toast.LENGTH_SHORT).show()
-                    }) { Text("Gợi ý app ngân hàng") }
+                    OutlinedButton(
+                        onClick = {
+                            val added = Exclusions.suggestFinance(context)
+                            prefs.excluded = prefs.excluded + added
+                            Toast.makeText(context, "Đã thêm ${added.size} app gợi ý", Toast.LENGTH_SHORT).show()
+                        },
+                        border = BorderStroke(1.dp, Night.Hairline),
+                        shape = MaterialTheme.shapes.medium,
+                    ) { Text("Gợi ý app ngân hàng", color = Night.Moonlight) }
                 }
-                Spacer(Modifier.width(8.dp))
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
@@ -119,15 +127,21 @@ fun SettingsScreen(refreshKey: Int) {
                 }.padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Checkbox(checked = checked, onCheckedChange = null, enabled = !clock)
+                Checkbox(
+                    checked = checked,
+                    onCheckedChange = null,
+                    enabled = !clock,
+                    colors = CheckboxDefaults.colors(
+                        checkedColor = Night.Green,
+                        checkmarkColor = Night.Ink,
+                        uncheckedColor = Night.Mist,
+                        disabledCheckedColor = Night.Green.copy(alpha = 0.4f),
+                    ),
+                )
                 Spacer(Modifier.width(8.dp))
-                Column {
-                    Text(app.label + if (clock) " (báo thức)" else "")
-                    Text(
-                        app.packageName,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                Column(Modifier.padding(vertical = 6.dp)) {
+                    Text(app.label + if (clock) " (báo thức)" else "", style = MaterialTheme.typography.bodyLarge)
+                    Text(app.packageName, style = MaterialTheme.typography.bodySmall, color = Night.Mist)
                 }
             }
         }
@@ -137,20 +151,21 @@ fun SettingsScreen(refreshKey: Int) {
 @Composable
 private fun PermissionRow(item: PermissionItem, granted: Boolean, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable(enabled = !granted, onClick = onClick).padding(vertical = 8.dp),
+        Modifier.fillMaxWidth().clickable(enabled = !granted, onClick = onClick).padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            if (granted) Icons.Filled.CheckCircle else Icons.Filled.ErrorOutline,
-            null,
-            tint = if (granted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-        )
-        Spacer(Modifier.width(12.dp))
+        StatusDot(ok = granted)
+        Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(item.title)
-            Text(item.why, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(item.title, style = MaterialTheme.typography.bodyLarge)
+            Text(item.why, style = MaterialTheme.typography.bodySmall, color = Night.Mist)
         }
-        if (!granted) Text("Bật", color = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.width(8.dp))
+        Text(
+            if (granted) "Đã bật" else "Bật",
+            style = MaterialTheme.typography.labelLarge,
+            color = if (granted) Night.Mist else Night.Green,
+        )
     }
 }
 

@@ -4,6 +4,7 @@ import android.Manifest
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,11 +18,11 @@ import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -46,6 +47,7 @@ import vn.quangns.timeforbed.core.Permissions
 import vn.quangns.timeforbed.ui.alarm.AlarmScreen
 import vn.quangns.timeforbed.ui.night.NightScreen
 import vn.quangns.timeforbed.ui.settings.SettingsScreen
+import vn.quangns.timeforbed.ui.theme.Night
 import vn.quangns.timeforbed.ui.timer.TimerScreen
 
 private data class Tab(val title: String, val icon: ImageVector)
@@ -84,13 +86,20 @@ fun MainScreen(tabRequest: MutableIntState) {
 
     Scaffold(
         bottomBar = {
-            NavigationBar {
+            NavigationBar(containerColor = Night.Surface, tonalElevation = 0.dp) {
                 TABS.forEachIndexed { i, t ->
                     NavigationBarItem(
                         selected = tab == i,
                         onClick = { tab = i },
                         icon = { Icon(t.icon, null) },
-                        label = { Text(t.title) },
+                        label = { Text(t.title, style = MaterialTheme.typography.labelSmall) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Night.Green,
+                            selectedTextColor = Night.Moonlight,
+                            indicatorColor = Night.Green.copy(alpha = 0.16f),
+                            unselectedIconColor = Night.Mist,
+                            unselectedTextColor = Night.Mist,
+                        ),
                     )
                 }
             }
@@ -113,17 +122,22 @@ fun MainScreen(tabRequest: MutableIntState) {
 @Composable
 private fun MissingPermissionBanner(count: Int, onClick: () -> Unit) {
     Surface(
-        color = MaterialTheme.colorScheme.errorContainer,
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        color = Night.Surface,
+        shape = MaterialTheme.shapes.medium,
+        border = BorderStroke(1.dp, Night.Hairline),
+        modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 12.dp).clickable(onClick = onClick),
     ) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.Warning, null, tint = MaterialTheme.colorScheme.onErrorContainer)
+            StatusDot(ok = false)
             Spacer(Modifier.width(12.dp))
             Text(
-                "Còn $count quyền chưa cấp — app có thể không tắt được media. Chạm để cấp quyền.",
-                color = MaterialTheme.colorScheme.onErrorContainer,
-                style = MaterialTheme.typography.bodyMedium,
+                "Còn $count quyền chưa cấp, app có thể chưa tắt được video, nhạc.",
+                color = Night.Moonlight,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.weight(1f),
             )
+            Spacer(Modifier.width(8.dp))
+            Text("Cấp quyền", color = Night.Green, style = MaterialTheme.typography.labelLarge)
         }
     }
 }

@@ -1,6 +1,7 @@
 package vn.quangns.timeforbed.ui.timer
 
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,10 +12,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -32,7 +33,8 @@ import kotlinx.coroutines.delay
 import vn.quangns.timeforbed.core.MediaKiller
 import vn.quangns.timeforbed.core.Prefs
 import vn.quangns.timeforbed.service.SleepTimer
-import vn.quangns.timeforbed.ui.SectionCard
+import vn.quangns.timeforbed.ui.ScreenHeader
+import vn.quangns.timeforbed.ui.theme.Night
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -40,71 +42,90 @@ import java.util.Locale
 @Composable
 fun TimerScreen() {
     val context = LocalContext.current
-    val settings by Prefs.get(context).state.collectAsStateWithLifecycle()
+    val prefs = remember { Prefs.get(context) }
+    val settings by prefs.state.collectAsStateWithLifecycle()
+
+    // Hạn chót đọc thẳng từ SharedPreferences (không chỉ chờ listener) để bấm Bắt đầu là đếm ngay.
+    var deadline by remember { mutableLongStateOf(prefs.timerDeadline) }
+    LaunchedEffect(settings.timerDeadline) { deadline = settings.timerDeadline }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
             now = System.currentTimeMillis()
-            delay(1_000 - now % 1_000) // canh đúng đầu mỗi giây để đếm ngược không nhảy cóc
+            deadline = prefs.timerDeadline // đồng bộ khi bấm +10 phút / Hủy từ thông báo
+            delay(1_000 - now % 1_000) // canh đầu mỗi giây để đếm ngược không nhảy cóc
         }
     }
-    val active = settings.timerDeadline > now
-    var minutes by rememberSaveable { mutableIntStateOf(settings.lastTimerMinutes.coerceIn(0, DialMath.MAX_MINUTES)) }
+    val active = deadline > now
+    var minutes by rememberSaveable { mutableIntStateOf(prefs.lastTimerMinutes.coerceIn(0, DialMath.MAX_MINUTES)) }
+
+    fun refresh() {
+        now = System.currentTimeMillis()
+        deadline = prefs.timerDeadline
+    }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
-        SectionCard(
+        ScreenHeader(
             if (active) "Đang hẹn giờ ngủ" else "Hẹn giờ ngủ",
-            subtitle = if (active) "Hết giờ sẽ dừng mọi video/nhạc (trừ báo thức, ngân hàng)"
-            else "Kéo vòng tròn để chọn 0–60 phút, rồi bấm Bắt đầu",
-        ) {
-            TimerDial(
-                minutes = minutes,
-                onMinutesChange = { minutes = it },
-                onStart = { if (minutes > 0) SleepTimer.start(context, minutes) },
-                remainingMs = if (active) settings.timerDeadline - now else null,
-                modifier = Modifier.padding(horizontal = 8.dp),
-            )
-            if (active) {
-                Text(
-                    "Tắt lúc " + SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(settings.timerDeadline)),
-                    modifier = Modifier.align(Alignment.CenterHorizontally),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(12.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedButton(onClick = { SleepTimer.extend(context) }, modifier = Modifier.weight(1f)) {
-                        Text("+${SleepTimer.EXTEND_MINUTES} phút")
-                    }
-                    Button(onClick = { SleepTimer.cancel(context) }, modifier = Modifier.weight(1f)) {
-                        Text("Hủy hẹn giờ")
-                    }
+            if (active) "Hết giờ sẽ dừng mọi video, nhạc — trừ báo thức và app ngân hàng."
+            else "Kéo quanh vòng để chọn 0–60 phút, rồi chạm Bắt đầu.",
+        )
+
+        TimerDial(
+            minutes = minutes,
+            onMinutesChange = { minutes = it },
+            onStart = {
+                if (minutes > 0) {
+                    SleepTimer.start(context, minutes)
+                    refresh()
                 }
+            },
+            remainingMs = if (active) deadline - now else null,
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+        )
+
+        if (active) {
+            Text(
+                "Tắt lúc " + SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(deadline)),
+                style = MaterialTheme.typography.bodyLarge,
+                color = Night.Mist,
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedButton(
+                    onClick = { SleepTimer.extend(context); refresh() },
+                    border = BorderStroke(1.dp, Night.Hairline),
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.weight(1f).height(52.dp),
+                ) { Text("+${SleepTimer.EXTEND_MINUTES} phút", color = Night.Moonlight) }
+                TextButton(
+                    onClick = { SleepTimer.cancel(context); refresh() },
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.weight(1f).height(52.dp),
+                ) { Text("Hủy hẹn giờ", color = Night.Ember) }
             }
         }
 
-        SectionCard("Tắt ngay", subtitle = "Dừng video/nhạc đang phát bây giờ") {
-            OutlinedButton(
-                onClick = {
-                    val stopped = MediaKiller.stopAll(context, "Tắt thủ công", lockScreen = false)
-                    val msg = if (stopped.isEmpty()) "Không thấy trình phát nào (hoặc chưa cấp quyền)"
-                    else "Đã dừng: " + stopped.joinToString()
-                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-                },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("Dừng tất cả media") }
-        }
-
-        if (settings.lastActionAt > 0) {
-            Text(
-                "Lần tắt gần nhất: " +
-                    SimpleDateFormat("HH:mm dd/MM", Locale.getDefault()).format(Date(settings.lastActionAt)) +
-                    " — ${settings.lastActionReason}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        Spacer(Modifier.height(4.dp))
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            TextButton(onClick = {
+                val stopped = MediaKiller.stopAll(context, "Tắt thủ công", lockScreen = false)
+                val msg = if (stopped.isEmpty()) "Không thấy trình phát nào (hoặc chưa cấp quyền)"
+                else "Đã dừng: " + stopped.joinToString()
+                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            }) { Text("Dừng mọi video, nhạc ngay", color = Night.Mist) }
+            if (settings.lastActionAt > 0) {
+                Text(
+                    "Lần tắt gần nhất " +
+                        SimpleDateFormat("HH:mm, dd/MM", Locale.getDefault()).format(Date(settings.lastActionAt)) +
+                        " · ${settings.lastActionReason}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Night.Mist.copy(alpha = 0.7f),
+                )
+            }
         }
     }
 }

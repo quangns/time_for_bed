@@ -9,7 +9,7 @@ import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,25 +20,26 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.outlined.Alarm
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimeInput
@@ -54,7 +55,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -64,7 +64,10 @@ import vn.quangns.timeforbed.alarm.AlarmScheduler
 import vn.quangns.timeforbed.alarm.AppDatabase
 import vn.quangns.timeforbed.alarm.DAY_SHORT
 import vn.quangns.timeforbed.alarm.daysText
+import vn.quangns.timeforbed.ui.NightSwitch
+import vn.quangns.timeforbed.ui.ScreenHeader
 import vn.quangns.timeforbed.ui.formatDuration
+import vn.quangns.timeforbed.ui.theme.Night
 
 @Composable
 fun AlarmScreen() {
@@ -87,17 +90,16 @@ fun AlarmScreen() {
     }
 
     Box(Modifier.fillMaxSize()) {
-        if (alarms.isEmpty()) {
-            Text(
-                "Chưa có báo thức nào",
-                modifier = Modifier.align(Alignment.Center),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
         LazyColumn(
-            contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 96.dp),
+            contentPadding = PaddingValues(20.dp, 16.dp, 20.dp, 112.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            item {
+                ScreenHeader("Báo thức", "Chuông reo cả khi máy đang khóa. Hẹn giờ ngủ không bao giờ tắt báo thức.")
+            }
+            if (alarms.isEmpty()) {
+                item { EmptyAlarms() }
+            }
             items(alarms, key = { it.id }) { alarm ->
                 AlarmRow(
                     alarm = alarm,
@@ -110,7 +112,10 @@ fun AlarmScreen() {
             onClick = { editing = AlarmEntity(hour = 6, minute = 0) },
             icon = { Icon(Icons.Filled.Add, null) },
             text = { Text("Thêm báo thức") },
-            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+            containerColor = Night.Green,
+            contentColor = Night.Ink,
+            elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
+            modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp),
         )
     }
 
@@ -137,26 +142,50 @@ fun AlarmScreen() {
 
 @Composable
 private fun AlarmRow(alarm: AlarmEntity, onToggle: (Boolean) -> Unit, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+    Surface(
+        onClick = onClick,
+        color = Night.Surface,
+        shape = MaterialTheme.shapes.large,
+        border = BorderStroke(1.dp, Night.Hairline),
+        modifier = Modifier.fillMaxWidth(),
     ) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(
                     "%02d:%02d".format(alarm.hour, alarm.minute),
-                    fontSize = 40.sp,
-                    color = if (alarm.enabled) MaterialTheme.colorScheme.onSurface
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.displaySmall,
+                    color = if (alarm.enabled) Night.Moonlight else Night.Mist.copy(alpha = 0.6f),
                 )
                 Text(
                     listOf(alarm.label, alarm.daysText()).filter { it.isNotBlank() }.joinToString(" · "),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Night.Mist,
                 )
             }
-            Switch(checked = alarm.enabled, onCheckedChange = onToggle)
+            NightSwitch(checked = alarm.enabled, onCheckedChange = onToggle)
         }
+    }
+}
+
+/** Trạng thái rỗng: biểu tượng nét mảnh + hướng dẫn cách thêm. */
+@Composable
+private fun EmptyAlarms() {
+    Column(
+        Modifier.fillMaxWidth().padding(top = 64.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(Icons.Outlined.Alarm, null, tint = Night.Mist, modifier = Modifier.size(48.dp))
+        Text(
+            "Chưa có báo thức",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(top = 16.dp),
+        )
+        Text(
+            "Chạm \"Thêm báo thức\" ở góc dưới để đặt giờ dậy.",
+            style = MaterialTheme.typography.bodySmall,
+            color = Night.Mist,
+            modifier = Modifier.padding(top = 4.dp),
+        )
     }
 }
 
@@ -190,11 +219,12 @@ private fun AlarmEditor(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = Night.Surface,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(if (initial.id == 0) "Báo thức mới" else "Sửa báo thức", Modifier.weight(1f))
                 if (onDelete != null) {
-                    IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, "Xóa") }
+                    IconButton(onClick = onDelete) { Icon(Icons.Outlined.Delete, "Xóa", tint = Night.Ember) }
                 }
             }
         },
@@ -227,7 +257,7 @@ private fun AlarmEditor(
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Rung", Modifier.weight(1f))
-                    Switch(checked = vibrate, onCheckedChange = { vibrate = it })
+                    NightSwitch(checked = vibrate, onCheckedChange = { vibrate = it })
                 }
                 Text("Báo lại sau", style = MaterialTheme.typography.labelLarge)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -247,7 +277,7 @@ private fun AlarmEditor(
                 )
             }) { Text("Lưu") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Hủy") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Hủy", color = Night.Mist) } },
     )
 }
 

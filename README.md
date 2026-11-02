@@ -9,6 +9,9 @@
 
 Yêu cầu: Android 8.0 (API 26) trở lên.
 
+Giao diện theo [DESIGN.md](DESIGN.md) — phong cách "nửa đêm tĩnh lặng", viết theo quy trình skill
+`taste-design` của [Google Stitch Skills](https://github.com/google-labs-code/stitch-skills).
+
 ## Cài đặt
 
 1. Tải `TimeForBed-<phiên bản>.apk` ở mục [Releases](../../releases) và cài (cho phép "Cài app không rõ nguồn gốc").

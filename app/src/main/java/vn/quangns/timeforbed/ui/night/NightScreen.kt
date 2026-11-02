@@ -5,15 +5,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,9 +32,27 @@ import vn.quangns.timeforbed.core.Permissions
 import vn.quangns.timeforbed.core.Prefs
 import vn.quangns.timeforbed.core.TimeRules
 import vn.quangns.timeforbed.service.BedtimeAccessibilityService
+import vn.quangns.timeforbed.ui.Hairline
+import vn.quangns.timeforbed.ui.NightSwitch
+import vn.quangns.timeforbed.ui.ScreenHeader
 import vn.quangns.timeforbed.ui.SectionCard
+import vn.quangns.timeforbed.ui.SettingRow
+import vn.quangns.timeforbed.ui.StatusDot
 import vn.quangns.timeforbed.ui.TimePickerDialog
+import vn.quangns.timeforbed.ui.theme.Night
 import java.time.LocalTime
+
+/** Ô giờ bấm được: nền Raised Dusk, chữ số tabular. */
+@Composable
+private fun TimePill(text: String, onClick: () -> Unit) {
+    Surface(onClick = onClick, color = Night.Raised, shape = MaterialTheme.shapes.small) {
+        Text(
+            text,
+            style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum"),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        )
+    }
+}
 
 @Composable
 fun NightScreen() {
@@ -58,74 +75,79 @@ fun NightScreen() {
     val inWindow = TimeRules.inWindow(s.nightStart, s.nightEnd, t.hour * 60 + t.minute)
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(28.dp),
     ) {
-        SectionCard(
-            "Tự tắt khi ngủ quên",
-            subtitle = "Trong khung giờ dưới đây, nếu quá ${s.idleMinutes} phút không chạm/thao tác thì tắt " +
-                "mọi video, nhạc (trừ báo thức, ngân hàng). Báo trước 1 phút.",
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Bật chế độ ban đêm", Modifier.weight(1f))
-                Switch(checked = s.nightEnabled, onCheckedChange = { prefs.nightEnabled = it })
-            }
-        }
+        ScreenHeader(
+            "Ban đêm",
+            "Ngủ quên khi đang xem? Quá ${s.idleMinutes} phút không chạm vào máy trong khung giờ này, " +
+                "app sẽ tắt video, nhạc. Báo trước 1 phút.",
+        )
 
-        SectionCard("Khung giờ", subtitle = "Có thể vắt qua nửa đêm, ví dụ 23:00 → 06:00") {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(onClick = { pick = "start" }, modifier = Modifier.weight(1f)) {
-                    Text("Từ " + TimeRules.formatMinuteOfDay(s.nightStart))
-                }
-                Spacer(Modifier.width(12.dp))
-                OutlinedButton(onClick = { pick = "end" }, modifier = Modifier.weight(1f)) {
-                    Text("Đến " + TimeRules.formatMinuteOfDay(s.nightEnd))
-                }
-            }
-            if (s.nightStart == s.nightEnd) {
-                Text("Giờ bắt đầu = giờ kết thúc: áp dụng cả ngày", style = MaterialTheme.typography.bodySmall)
-            }
+        // Trạng thái: một dòng, chấm xanh = đang theo dõi, chấm cam = cần xử lý.
+        val watching = s.nightEnabled && serviceOn && inWindow
+        val status = when {
+            !s.nightEnabled -> "Đang tắt"
+            !serviceOn -> "Chưa bật Trợ năng, chế độ ban đêm chưa hoạt động"
+            inWindow -> "Đang theo dõi"
+            else -> "Chờ đến " + TimeRules.formatMinuteOfDay(s.nightStart)
         }
-
-        SectionCard("Ngưỡng không thao tác") {
-            Text("${idle.toInt()} phút", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
-            Slider(
-                value = idle,
-                onValueChange = { idle = (it / 5).toInt().coerceAtLeast(1) * 5f },
-                onValueChangeFinished = { prefs.idleMinutes = idle.toInt() },
-                valueRange = 5f..120f,
-            )
-        }
-
-        SectionCard("Sau khi tắt media") {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Về màn hình chính và khóa máy")
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            StatusDot(ok = s.nightEnabled && serviceOn)
+            Spacer(Modifier.width(10.dp))
+            Column {
+                Text(status, style = MaterialTheme.typography.bodyLarge)
+                if (serviceOn && watching) {
+                    val mins = ((now - lastInteraction) / 60_000).coerceAtLeast(0)
                     Text(
-                        "Áp dụng cho cả hẹn giờ ngủ. Bỏ qua nếu đang mở app ngân hàng.",
+                        "Thao tác gần nhất " + if (mins == 0L) "vừa xong" else "$mins phút trước",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = Night.Mist,
                     )
                 }
-                Switch(checked = s.lockAfterStop, onCheckedChange = { prefs.lockAfterStop = it })
             }
         }
 
-        SectionCard("Trạng thái") {
-            val status = when {
-                !s.nightEnabled -> "Đang tắt"
-                !serviceOn -> "Chưa bật Trợ năng — chế độ ban đêm không hoạt động"
-                inWindow -> "Đang trong khung giờ — đang theo dõi"
-                else -> "Ngoài khung giờ — chờ đến " + TimeRules.formatMinuteOfDay(s.nightStart)
+        SectionCard("Tự tắt khi ngủ quên") {
+            SettingRow("Bật chế độ ban đêm") {
+                NightSwitch(checked = s.nightEnabled, onCheckedChange = { prefs.nightEnabled = it })
             }
-            Text(status)
-            if (serviceOn) {
-                val mins = ((now - lastInteraction) / 60_000).coerceAtLeast(0)
-                Text(
-                    "Thao tác gần nhất: " + if (mins == 0L) "vừa xong" else "$mins phút trước",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Hairline()
+            SettingRow(
+                "Khung giờ",
+                description = if (s.nightStart == s.nightEnd) "Giờ bắt đầu trùng giờ kết thúc: áp dụng cả ngày"
+                else "Có thể vắt qua nửa đêm, ví dụ 23:00 – 06:00",
+            ) {
+                TimePill(TimeRules.formatMinuteOfDay(s.nightStart)) { pick = "start" }
+                Text("–", color = Night.Mist, modifier = Modifier.padding(horizontal = 6.dp))
+                TimePill(TimeRules.formatMinuteOfDay(s.nightEnd)) { pick = "end" }
+            }
+            Hairline()
+            Column(Modifier.padding(vertical = 12.dp)) {
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text("Không thao tác quá", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    Text("${idle.toInt()} phút", style = MaterialTheme.typography.titleLarge, color = Night.Green)
+                }
+                Slider(
+                    value = idle,
+                    onValueChange = { idle = (it / 5).toInt().coerceAtLeast(1) * 5f },
+                    onValueChangeFinished = { prefs.idleMinutes = idle.toInt() },
+                    valueRange = 5f..120f,
+                    colors = SliderDefaults.colors(
+                        thumbColor = Night.Moonlight,
+                        activeTrackColor = Night.Green,
+                        inactiveTrackColor = Night.Raised,
+                    ),
                 )
+            }
+        }
+
+        SectionCard("Sau khi tắt") {
+            SettingRow(
+                "Về màn hình chính và khóa máy",
+                description = "Áp dụng cả cho hẹn giờ ngủ. Bỏ qua nếu đang mở app ngân hàng.",
+            ) {
+                NightSwitch(checked = s.lockAfterStop, onCheckedChange = { prefs.lockAfterStop = it })
             }
         }
     }

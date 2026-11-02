@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import androidx.core.content.ContextCompat
 import vn.quangns.timeforbed.core.Notifications
 import vn.quangns.timeforbed.core.Permissions
@@ -14,6 +15,7 @@ import vn.quangns.timeforbed.core.Prefs
 object SleepTimer {
     const val EXTEND_MINUTES = 10
     private const val WARN_BEFORE_MS = 60_000L
+    private const val TAG = "SleepTimer"
 
     fun start(context: Context, minutes: Int) {
         val prefs = Prefs.get(context)
@@ -51,15 +53,25 @@ object SleepTimer {
         val am = context.getSystemService(AlarmManager::class.java)
         if (warnAt > System.currentTimeMillis()) schedule(context, warnAt, TimerReceiver.ACTION_WARN)
         else am.cancel(pending(context, TimerReceiver.ACTION_WARN))
-        ContextCompat.startForegroundService(context, Intent(context, SleepTimerService::class.java))
+        // Thông báo đếm ngược chỉ để hiển thị; nếu hệ thống chặn FGS thì hẹn giờ vẫn chạy nhờ AlarmManager.
+        try {
+            ContextCompat.startForegroundService(context, Intent(context, SleepTimerService::class.java))
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "Không mở được thông báo đếm ngược", e)
+        }
     }
 
     private fun schedule(context: Context, at: Long, action: String) {
         val am = context.getSystemService(AlarmManager::class.java)
         val pi = pending(context, action)
-        if (Permissions.canScheduleExact(context)) {
-            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
-        } else {
+        try {
+            if (Permissions.canScheduleExact(context)) {
+                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
+            } else {
+                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
+            }
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Không có quyền báo thức chính xác, dùng hẹn giờ thường", e)
             am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
         }
     }
