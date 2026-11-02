@@ -2,7 +2,7 @@
 
 Ứng dụng Android giúp đi ngủ đúng giờ — **không cần root**, chạy nền:
 
-- **Hẹn giờ ngủ**: đếm ngược (5–240 phút), hết giờ thì dừng mọi video/nhạc, về màn hình chính và khóa máy. Báo trước 1 phút, có nút **+10 phút** ngay trên thông báo.
+- **Hẹn giờ ngủ**: kéo vòng tròn chọn 0–60 phút, bấm nút tròn xanh **Bắt đầu**; giữa vòng hiện đếm ngược đến từng giây. Hết giờ thì dừng mọi video/nhạc, về màn hình chính và khóa máy. Báo trước 1 phút, có nút **+10 phút** ngay trên thông báo.
 - **Tự tắt khi ngủ quên**: trong khung giờ đêm (mặc định **00:00–06:00**), nếu quá **30 phút** không chạm/thao tác thì tự dừng video/nhạc và khóa máy. Khung giờ và ngưỡng chỉnh được, hỗ trợ khung vắt qua nửa đêm (vd 23:00–06:00).
 - **Báo thức**: nhiều báo thức, lặp theo thứ, chọn chuông, rung, báo lại 5/10/15 phút; reo toàn màn hình cả khi máy đang khóa; tự đặt lại sau khi khởi động lại máy.
 - **Ngoại lệ**: không bao giờ đụng tới app đồng hồ/báo thức và các app ngân hàng, ví điện tử (tự gợi ý VCB, BIDV, VietinBank, MB, Techcombank, VNPT Money, MoMo, ZaloPay…; thêm/bớt được trong tab Cài đặt).
@@ -67,7 +67,7 @@ keyPassword=...
 ## Kiểm thử trên máy thật
 
 1. Cấp đủ quyền (tab Cài đặt không còn mục đỏ).
-2. Mở YouTube/Spotify → tab *Hẹn giờ* → **Thử nhanh: 1 phút** → sau 1 phút media dừng, về màn hình chính, máy khóa.
+2. Mở YouTube/Spotify → tab *Hẹn giờ* → kéo vòng tới 1 phút → **Bắt đầu** → sau 1 phút media dừng, về màn hình chính, máy khóa.
 3. Tab *Ban đêm*: đặt khung giờ bao giờ hiện tại, ngưỡng 5 phút, để video chạy không chạm → phút thứ 4 có cảnh báo, phút thứ 5 tự tắt.
 4. Phát âm thanh trong app ngân hàng/đồng hồ đã loại trừ → không bị tác động.
 5. Đặt báo thức 2 phút sau, khóa máy → chuông + màn hình báo thức; thử *Báo lại* / *Tắt*; khởi động lại máy → báo thức vẫn còn.
