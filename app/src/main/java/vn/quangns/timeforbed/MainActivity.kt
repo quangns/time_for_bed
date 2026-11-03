@@ -30,5 +30,6 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_TAB = "tab"
+        const val TAB_POMODORO = 3
     }
 }

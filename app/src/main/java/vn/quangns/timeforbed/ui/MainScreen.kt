@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -45,7 +46,9 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import vn.quangns.timeforbed.core.PermissionItem
 import vn.quangns.timeforbed.core.Permissions
 import vn.quangns.timeforbed.ui.alarm.AlarmScreen
+import vn.quangns.timeforbed.MainActivity
 import vn.quangns.timeforbed.ui.night.NightScreen
+import vn.quangns.timeforbed.ui.pomodoro.PomodoroScreen
 import vn.quangns.timeforbed.ui.settings.SettingsScreen
 import vn.quangns.timeforbed.ui.theme.Night
 import vn.quangns.timeforbed.ui.timer.TimerScreen
@@ -56,9 +59,10 @@ private val TABS = listOf(
     Tab("Hẹn giờ", Icons.Filled.Bedtime),
     Tab("Ban đêm", Icons.Filled.NightsStay),
     Tab("Báo thức", Icons.Filled.Alarm),
+    Tab("Pomodoro", Icons.Filled.Timer),
     Tab("Cài đặt", Icons.Filled.Settings),
 )
-const val TAB_SETTINGS = 3
+const val TAB_SETTINGS = 4
 
 @Composable
 fun MainScreen(tabRequest: MutableIntState) {
@@ -122,6 +126,7 @@ fun MainScreen(tabRequest: MutableIntState) {
                 0 -> TimerScreen()
                 1 -> NightScreen()
                 2 -> AlarmScreen()
+                MainActivity.TAB_POMODORO -> PomodoroScreen()
                 else -> SettingsScreen(refreshKey = refresh)
             }
         }

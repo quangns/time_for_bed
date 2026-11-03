@@ -59,6 +59,14 @@ class ScreenshotTest {
         shot("2-timer-running") { TimerScreen() }
     }
 
+    @Test fun pomodoro() {
+        vn.quangns.timeforbed.pomodoro.Pomodoro.resetForTest()
+        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+        vn.quangns.timeforbed.pomodoro.Pomodoro.reset(ctx)
+        vn.quangns.timeforbed.pomodoro.Pomodoro.start(ctx)
+        shot("5-pomodoro") { vn.quangns.timeforbed.ui.pomodoro.PomodoroScreen() }
+    }
+
     @Test fun night() = shot("3-night") { NightScreen() }
 
     @Test fun settings() = shot("4-settings") { SettingsScreen(refreshKey = 0) }

@@ -96,6 +96,10 @@
             android:exported="false" />
 
         <receiver
+            android:name=".pomodoro.PomodoroReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".service.BootReceiver"
             android:exported="true"
             tools:ignore="ExportedReceiver">
