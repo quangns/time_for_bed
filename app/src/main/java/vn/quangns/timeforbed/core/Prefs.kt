@@ -27,19 +27,26 @@ data class Settings(
  * Lưu cài đặt bằng SharedPreferences: đọc đồng bộ được từ receiver/service
  * (Accessibility, BroadcastReceiver) mà không cần coroutine.
  */
-class Prefs private constructor(context: Context) {
+class Prefs private constructor(context: Context) : SharedPreferences.OnSharedPreferenceChangeListener {
     private val sp: SharedPreferences =
         context.applicationContext.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
     private val _state = MutableStateFlow(read())
     val state: StateFlow<Settings> = _state.asStateFlow()
 
-    private val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
-        _state.value = read()
+    /*
+     * Chính đối tượng Prefs (singleton, sống suốt vòng đời app) làm listener.
+     * SharedPreferences chỉ giữ listener bằng tham chiếu YẾU; bản 1.3.1 trở về trước dùng một lambda lưu
+     * trong field, nhưng R8 (bản release) xoá field chỉ dùng trong init → listener bị dọn rác → state không
+     * cập nhật nữa → tab Ban đêm lưu xong quay lại vẫn hiện giá trị cũ, dịch vụ ban đêm cũng không thấy
+     * cài đặt mới.
+     */
+    init {
+        sp.registerOnSharedPreferenceChangeListener(this)
     }
 
-    init {
-        sp.registerOnSharedPreferenceChangeListener(listener)
+    override fun onSharedPreferenceChanged(prefs: SharedPreferences?, key: String?) {
+        _state.value = read()
     }
 
     var nightEnabled: Boolean
@@ -87,11 +94,14 @@ class Prefs private constructor(context: Context) {
         set(v) = sp.edit { putInt(K_MUTED_PREV, v) }
 
     /** Lưu cài đặt ban đêm một lần, ghi đồng bộ xuống bộ nhớ để không mất khi app bị đóng ngay sau đó. */
-    fun saveNight(enabled: Boolean, start: Int, end: Int, idleMinutes: Int) = sp.edit(commit = true) {
-        putBoolean(K_NIGHT_ENABLED, enabled)
-        putInt(K_NIGHT_START, start)
-        putInt(K_NIGHT_END, end)
-        putInt(K_IDLE, idleMinutes)
+    fun saveNight(enabled: Boolean, start: Int, end: Int, idleMinutes: Int) {
+        sp.edit(commit = true) {
+            putBoolean(K_NIGHT_ENABLED, enabled)
+            putInt(K_NIGHT_START, start)
+            putInt(K_NIGHT_END, end)
+            putInt(K_IDLE, idleMinutes)
+        }
+        _state.value = read() // không phụ thuộc listener: màn hình và dịch vụ ban đêm thấy ngay giá trị mới
     }
 
     fun recordStopReport(report: String) = sp.edit { putString(K_LAST_STOP_REPORT, report) }
