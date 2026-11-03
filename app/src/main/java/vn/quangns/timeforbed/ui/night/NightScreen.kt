@@ -1,30 +1,36 @@
 package vn.quangns.timeforbed.ui.night
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -35,6 +41,7 @@ import vn.quangns.timeforbed.core.Permissions
 import vn.quangns.timeforbed.core.Prefs
 import vn.quangns.timeforbed.core.TimeRules
 import vn.quangns.timeforbed.service.BedtimeAccessibilityService
+import vn.quangns.timeforbed.ui.DialRing
 import vn.quangns.timeforbed.ui.Hairline
 import vn.quangns.timeforbed.ui.NightSwitch
 import vn.quangns.timeforbed.ui.ScreenHeader
@@ -44,6 +51,10 @@ import vn.quangns.timeforbed.ui.StatusDot
 import vn.quangns.timeforbed.ui.TimePickerDialog
 import vn.quangns.timeforbed.ui.theme.Night
 import java.time.LocalTime
+
+const val IDLE_MIN = 5
+const val IDLE_MAX = 120
+private const val IDLE_STEP = 5
 
 /** Ô giờ bấm được: nền Raised Dusk, chữ số tabular. */
 @Composable
@@ -57,13 +68,23 @@ private fun TimePill(text: String, onClick: () -> Unit) {
     }
 }
 
+/**
+ * Tab Ban đêm. Mọi thay đổi là bản nháp, chỉ ghi khi bấm "Lưu thay đổi" (ghi đồng bộ cả 4 giá trị),
+ * nên không còn chuyện kéo xong bị trả về giá trị cũ hay không biết đã lưu chưa.
+ */
 @Composable
 fun NightScreen() {
     val context = LocalContext.current
-    val prefs = Prefs.get(context)
+    val prefs = remember { Prefs.get(context) }
     val s by prefs.state.collectAsStateWithLifecycle()
+
+    // Bản nháp: tạo lại mỗi khi giá trị đã lưu đổi (vd vừa bấm Lưu).
+    var enabled by rememberSaveable(s.nightEnabled) { mutableStateOf(s.nightEnabled) }
+    var start by rememberSaveable(s.nightStart) { mutableIntStateOf(s.nightStart) }
+    var end by rememberSaveable(s.nightEnd) { mutableIntStateOf(s.nightEnd) }
+    var idle by rememberSaveable(s.idleMinutes) { mutableIntStateOf(s.idleMinutes.coerceIn(IDLE_MIN, IDLE_MAX)) }
+    val dirty = enabled != s.nightEnabled || start != s.nightStart || end != s.nightEnd || idle != s.idleMinutes
     var pick by remember { mutableStateOf<String?>(null) }
-    var idle by remember(s.idleMinutes) { mutableFloatStateOf(s.idleMinutes.toFloat()) }
 
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -86,11 +107,11 @@ fun NightScreen() {
     ) {
         ScreenHeader(
             "Ban đêm",
-            subtitle = "Ngủ quên khi đang xem? Quá ${s.idleMinutes} phút không chạm vào máy trong khung giờ này, " +
+            subtitle = "Ngủ quên khi đang xem? Quá $idle phút không chạm vào máy trong khung giờ này, " +
                 "app sẽ tạm dừng video, nhạc rồi khóa màn hình. Báo trước 1 phút.",
         )
 
-        // Trạng thái: một dòng, chấm xanh = đang theo dõi, chấm cam = cần xử lý.
+        // Trạng thái theo giá trị ĐÃ LƯU: chấm xanh = đang theo dõi, chấm cam = cần xử lý.
         val watching = s.nightEnabled && serviceOn && inWindow
         val status = when {
             !s.nightEnabled -> "Đang tắt"
@@ -116,46 +137,81 @@ fun NightScreen() {
 
         SectionCard("Tự tắt khi ngủ quên") {
             SettingRow("Bật chế độ ban đêm") {
-                NightSwitch(checked = s.nightEnabled, onCheckedChange = { prefs.nightEnabled = it })
+                NightSwitch(checked = enabled, onCheckedChange = { enabled = it })
             }
             Hairline()
             SettingRow(
                 "Khung giờ",
-                description = if (s.nightStart == s.nightEnd) "Giờ bắt đầu trùng giờ kết thúc: áp dụng cả ngày"
+                description = if (start == end) "Giờ bắt đầu trùng giờ kết thúc: áp dụng cả ngày"
                 else "Có thể vắt qua nửa đêm, ví dụ 23:00 – 06:00",
             ) {
-                TimePill(TimeRules.formatMinuteOfDay(s.nightStart)) { pick = "start" }
+                TimePill(TimeRules.formatMinuteOfDay(start)) { pick = "start" }
                 Text("–", color = Night.Mist, modifier = Modifier.padding(horizontal = 6.dp))
-                TimePill(TimeRules.formatMinuteOfDay(s.nightEnd)) { pick = "end" }
+                TimePill(TimeRules.formatMinuteOfDay(end)) { pick = "end" }
             }
             Hairline()
-            Column(Modifier.padding(vertical = 12.dp)) {
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text("Không thao tác quá", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                    Text("${idle.toInt()} phút", style = MaterialTheme.typography.titleLarge, color = Night.Green)
+            Text(
+                "Không thao tác quá",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(top = 12.dp),
+            )
+            Text(
+                "Kéo quanh vòng để chọn $IDLE_MIN–$IDLE_MAX phút",
+                style = MaterialTheme.typography.bodySmall,
+                color = Night.Mist,
+            )
+            DialRing(
+                value = idle,
+                max = IDLE_MAX,
+                onValueChange = { idle = it },
+                description = "Vòng chọn thời gian không thao tác, $idle phút",
+                step = IDLE_STEP,
+                minValue = IDLE_MIN,
+                maxWidth = 240.dp,
+                centerRatio = 0.6f,
+                modifier = Modifier.align(Alignment.CenterHorizontally).padding(vertical = 8.dp).testTag("idleDial"),
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("$idle", style = MaterialTheme.typography.displayMedium, color = Night.Moonlight)
+                    Text("phút", style = MaterialTheme.typography.bodySmall, color = Night.Mist)
                 }
-                Slider(
-                    value = idle,
-                    onValueChange = { idle = (it / 5).toInt().coerceAtLeast(1) * 5f },
-                    onValueChangeFinished = { prefs.idleMinutes = idle.toInt() },
-                    valueRange = 5f..120f,
-                    colors = SliderDefaults.colors(
-                        thumbColor = Night.Moonlight,
-                        activeTrackColor = Night.Green,
-                        inactiveTrackColor = Night.Raised,
-                    ),
-                )
+            }
+        }
+
+        Column(Modifier.fillMaxWidth()) {
+            Button(
+                onClick = {
+                    prefs.saveNight(enabled, start, end, idle)
+                    Toast.makeText(context, "Đã lưu cài đặt ban đêm", Toast.LENGTH_SHORT).show()
+                },
+                enabled = dirty,
+                shape = MaterialTheme.shapes.medium,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Night.Green,
+                    contentColor = Night.Ink,
+                    disabledContainerColor = Night.Raised,
+                    disabledContentColor = Night.Mist,
+                ),
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+            ) { Text(if (dirty) "Lưu thay đổi" else "Đã lưu") }
+            if (dirty) {
+                TextButton(
+                    onClick = {
+                        enabled = s.nightEnabled; start = s.nightStart; end = s.nightEnd; idle = s.idleMinutes
+                    },
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                ) { Text("Hoàn tác", color = Night.Mist) }
             }
         }
     }
 
     when (pick) {
-        "start" -> TimePickerDialog("Bắt đầu", s.nightStart, { pick = null }) {
-            prefs.nightStart = it
+        "start" -> TimePickerDialog("Bắt đầu", start, { pick = null }) {
+            start = it
             pick = null
         }
-        "end" -> TimePickerDialog("Kết thúc", s.nightEnd, { pick = null }) {
-            prefs.nightEnd = it
+        "end" -> TimePickerDialog("Kết thúc", end, { pick = null }) {
+            end = it
             pick = null
         }
     }

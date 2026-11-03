@@ -37,4 +37,19 @@ class DialMathTest {
         assertEquals("00:59", formatCountdown(59_000L))
         assertEquals("1:05:09", formatCountdown((3600 + 5 * 60 + 9) * 1000L))
     }
+
+    @Test
+    fun snapToStep() {
+        assertEquals(60, DialMath.snap(62, 5, 5, 120))
+        assertEquals(65, DialMath.snap(63, 5, 5, 120))
+        assertEquals(5, DialMath.snap(0, 5, 5, 120)) // không cho dưới 5 phút
+        assertEquals(120, DialMath.snap(120, 5, 5, 120))
+    }
+
+    @Test
+    fun scale120_quarterPositions() {
+        assertEquals(30, DialMath.minutesAt(100f, 0f, previous = 20, max = 120))
+        assertEquals(60, DialMath.minutesAt(0f, 100f, previous = 60, max = 120))
+        assertEquals(90, DialMath.minutesAt(-100f, 0f, previous = 80, max = 120))
+    }
 }

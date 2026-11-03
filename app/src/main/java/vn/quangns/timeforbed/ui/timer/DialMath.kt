@@ -25,6 +25,10 @@ object DialMath {
         }
     }
 
+    /** Làm tròn [minutes] về bội số [step] gần nhất, giới hạn trong [minValue]..[max]. */
+    fun snap(minutes: Int, step: Int, minValue: Int, max: Int): Int =
+        (((minutes + step / 2) / step) * step).coerceIn(minValue, max)
+
     /** Tỉ lệ cung tròn (0..1) cho thời gian còn lại, thang 60 phút. */
     fun fraction(remainingMs: Long, max: Int = MAX_MINUTES): Float =
         (remainingMs.toFloat() / (max * 60_000f)).coerceIn(0f, 1f)

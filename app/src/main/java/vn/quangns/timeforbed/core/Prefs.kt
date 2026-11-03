@@ -2,6 +2,7 @@ package vn.quangns.timeforbed.core
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.annotation.VisibleForTesting
 import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -85,6 +86,14 @@ class Prefs private constructor(context: Context) {
         get() = sp.getInt(K_MUTED_PREV, 0)
         set(v) = sp.edit { putInt(K_MUTED_PREV, v) }
 
+    /** Lưu cài đặt ban đêm một lần, ghi đồng bộ xuống bộ nhớ để không mất khi app bị đóng ngay sau đó. */
+    fun saveNight(enabled: Boolean, start: Int, end: Int, idleMinutes: Int) = sp.edit(commit = true) {
+        putBoolean(K_NIGHT_ENABLED, enabled)
+        putInt(K_NIGHT_START, start)
+        putInt(K_NIGHT_END, end)
+        putInt(K_IDLE, idleMinutes)
+    }
+
     fun recordStopReport(report: String) = sp.edit { putString(K_LAST_STOP_REPORT, report) }
 
     private fun read() = Settings(
@@ -116,6 +125,12 @@ class Prefs private constructor(context: Context) {
 
         @Volatile
         private var instance: Prefs? = null
+
+        /** Chỉ dùng trong test: Robolectric tạo Application mới cho mỗi test. */
+        @VisibleForTesting
+        fun resetForTest() {
+            instance = null
+        }
 
         fun get(context: Context): Prefs =
             instance ?: synchronized(this) {
