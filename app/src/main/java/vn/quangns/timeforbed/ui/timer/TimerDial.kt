@@ -25,9 +25,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import vn.quangns.timeforbed.ui.DialRing
 import vn.quangns.timeforbed.ui.theme.Night
@@ -114,10 +116,13 @@ private fun StartButton(minutes: Int, onStart: () -> Unit) {
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Text("Bắt đầu", fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+            // Số phút đã chọn: đủ lớn để đọc được khi mắt đã mỏi, nhỏ hơn chữ "Bắt đầu" một bậc.
             Text(
                 if (enabled) "$minutes phút" else "Kéo vòng để chọn",
-                style = MaterialTheme.typography.bodySmall,
-                color = Night.Ink.copy(alpha = 0.75f),
+                fontSize = if (enabled) 22.sp else 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = Night.Ink.copy(alpha = 0.85f),
+                modifier = Modifier.padding(top = 2.dp),
             )
         }
     }
