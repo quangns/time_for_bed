@@ -73,10 +73,19 @@ fun MainScreen(tabRequest: MutableIntState) {
         Permissions.applicable().filterNot { Permissions.isGranted(context, it) }
     }
 
+    // Lần đầu mở app: hiện chính sách quyền riêng tư trước, rồi mới hỏi quyền thông báo.
+    var privacyOk by remember { mutableStateOf(privacySeen(context)) }
+    if (!privacyOk) {
+        PrivacyDialog(onDismiss = {
+            markPrivacySeen(context)
+            privacyOk = true
+        })
+    }
+
     val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { refresh++ }
     var askedNotif by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        if (!askedNotif && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+    LaunchedEffect(privacyOk) {
+        if (privacyOk && !askedNotif && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             !Permissions.isGranted(context, PermissionItem.POST_NOTIFICATIONS)
         ) {
             askedNotif = true

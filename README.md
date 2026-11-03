@@ -1,5 +1,7 @@
 # Time for Bed 🌙
 
+> **Quyền riêng tư:** app không kết nối Internet, không thu thập hay theo dõi dữ liệu người dùng — xem [PRIVACY.md](PRIVACY.md).
+
 Ứng dụng Android giúp đi ngủ đúng giờ — **không cần root**, chạy nền:
 
 - **Hẹn giờ ngủ**: kéo vòng tròn chọn 0–60 phút, bấm nút tròn xanh **Bắt đầu**; giữa vòng hiện đếm ngược đến từng giây. Hết giờ thì dừng mọi video/nhạc, về màn hình chính và khóa máy. Báo trước 1 phút, có nút **+10 phút** ngay trên thông báo.

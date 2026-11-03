@@ -1,5 +1,7 @@
 package vn.quangns.timeforbed.ui.settings
 
+import vn.quangns.timeforbed.ui.PRIVACY_LEAD
+import vn.quangns.timeforbed.ui.PrivacyDialog
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -129,6 +131,18 @@ fun SettingsScreen(refreshKey: Int) {
                     Text("Mở Thông tin ứng dụng", color = Night.Green)
                 }
             }
+        }
+        item {
+            var showPrivacy by remember { mutableStateOf(false) }
+            SectionCard("Quyền riêng tư", subtitle = PRIVACY_LEAD) {
+                Text(
+                    "Không kết nối Internet, không tài khoản, không thống kê. Mọi dữ liệu chỉ nằm trên máy này.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Night.Mist,
+                )
+                TextButton(onClick = { showPrivacy = true }) { Text("Xem chính sách quyền riêng tư", color = Night.Green) }
+            }
+            if (showPrivacy) PrivacyDialog(onDismiss = { showPrivacy = false }, confirmText = "Đóng")
         }
         item {
             SectionCard(
