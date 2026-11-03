@@ -15,8 +15,8 @@ android {
         applicationId = "vn.quangns.timeforbed"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "1.2.5"
+        versionCode = 9
+        versionName = "1.2.6"
     }
 
     // Khóa ký release đọc từ keystore.properties (không commit). Thiếu file thì release không ký.
