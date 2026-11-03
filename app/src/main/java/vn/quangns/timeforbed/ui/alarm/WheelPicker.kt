@@ -65,8 +65,16 @@ fun WheelPicker(
         }
     }
 
+    /**
+     * Đích đang tự cuộn tới khi [value] đổi từ bên ngoài (-1 = không có). Trong lúc đó không báo ngược
+     * các số bánh xe lướt qua — nếu báo, [value] bị đổi giữa chừng, lần cuộn bị huỷ và lưu nhầm giờ
+     * (vd bấm "+15 phút" lúc 06:10 lại lưu 06:11).
+     */
+    val autoTarget = remember { IntArray(1) { -1 } }
+
     LaunchedEffect(state) {
         snapshotFlow { centerIndex % count }.distinctUntilChanged().collect {
+            if (autoTarget[0] >= 0) return@collect
             haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             onChange(it)
         }
@@ -78,7 +86,13 @@ fun WheelPicker(
         if (current != value && !state.isScrollInProgress) {
             var delta = (value - current + count) % count
             if (delta > count / 2) delta -= count
-            state.animateScrollToItem(centerIndex + delta - VISIBLE / 2)
+            autoTarget[0] = value
+            try {
+                state.animateScrollToItem(centerIndex + delta - VISIBLE / 2)
+            } finally {
+                // Xong, hoặc bị người dùng chạm vào giữa chừng → trả quyền báo giá trị cho thao tác tay.
+                if (autoTarget[0] == value) autoTarget[0] = -1
+            }
         }
     }
 

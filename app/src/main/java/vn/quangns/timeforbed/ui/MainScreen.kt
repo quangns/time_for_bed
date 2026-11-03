@@ -27,6 +27,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableIntState
@@ -43,10 +44,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vn.quangns.timeforbed.core.PermissionItem
 import vn.quangns.timeforbed.core.Permissions
 import vn.quangns.timeforbed.ui.alarm.AlarmScreen
 import vn.quangns.timeforbed.MainActivity
+import vn.quangns.timeforbed.alarm.AlarmRingService
 import vn.quangns.timeforbed.ui.night.NightScreen
 import vn.quangns.timeforbed.ui.pomodoro.PomodoroScreen
 import vn.quangns.timeforbed.ui.settings.SettingsScreen
@@ -67,8 +70,15 @@ const val TAB_SETTINGS = 4
 @Composable
 fun MainScreen(tabRequest: MutableIntState) {
     val context = LocalContext.current
-    var tab by rememberSaveable { mutableIntStateOf(tabRequest.intValue) }
-    LaunchedEffect(tabRequest.intValue) { tab = tabRequest.intValue }
+    var tab by rememberSaveable { mutableIntStateOf(tabRequest.intValue.coerceAtLeast(0)) }
+    // Mở tab theo yêu cầu rồi "tiêu thụ" yêu cầu (-1), để lần bấm thông báo sau vẫn mở được dù cùng tab.
+    LaunchedEffect(tabRequest.intValue) {
+        val requested = tabRequest.intValue
+        if (requested >= 0) {
+            tab = requested
+            tabRequest.intValue = MainActivity.NO_TAB
+        }
+    }
 
     // Trạng thái quyền, làm mới mỗi khi quay lại app (sau khi người dùng bật trong Cài đặt).
     var refresh by remember { mutableIntStateOf(0) }
@@ -119,12 +129,15 @@ fun MainScreen(tabRequest: MutableIntState) {
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
+            // Luôn có cách tắt chuông ngay trong app, kể cả khi thông báo bị chặn.
+            val ringing by AlarmRingService.ringing.collectAsStateWithLifecycle()
+            ringing?.let { RingingBanner(it.snoozeMinutes) }
             if (missing.isNotEmpty() && tab != TAB_SETTINGS) {
                 MissingPermissionBanner(missing.size) { tab = TAB_SETTINGS }
             }
             when (tab) {
                 0 -> TimerScreen()
-                1 -> NightScreen()
+                1 -> NightScreen(refreshKey = refresh)
                 2 -> AlarmScreen()
                 MainActivity.TAB_POMODORO -> PomodoroScreen()
                 else -> SettingsScreen(refreshKey = refresh)
@@ -152,6 +165,27 @@ private fun MissingPermissionBanner(count: Int, onClick: () -> Unit) {
             )
             Spacer(Modifier.width(8.dp))
             Text("Cấp quyền", color = Night.Green, style = MaterialTheme.typography.labelLarge)
+        }
+    }
+}
+
+@Composable
+private fun RingingBanner(snoozeMinutes: Int) {
+    val context = LocalContext.current
+    Surface(
+        color = Night.Green,
+        contentColor = Night.Ink,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 12.dp),
+    ) {
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Báo thức đang reo", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            TextButton(onClick = { AlarmRingService.send(context, AlarmRingService.ACTION_SNOOZE) }) {
+                Text("Báo lại $snoozeMinutes′", color = Night.Ink)
+            }
+            TextButton(onClick = { AlarmRingService.send(context, AlarmRingService.ACTION_DISMISS) }) {
+                Text("Tắt", color = Night.Ink, style = MaterialTheme.typography.titleMedium)
+            }
         }
     }
 }

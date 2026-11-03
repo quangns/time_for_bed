@@ -55,7 +55,8 @@ import vn.quangns.timeforbed.ui.SettingRow
 import vn.quangns.timeforbed.ui.StatusDot
 import vn.quangns.timeforbed.ui.TimePickerDialog
 import vn.quangns.timeforbed.ui.theme.Night
-import java.time.LocalTime
+import java.time.Instant
+import java.time.ZoneId
 
 const val IDLE_MIN = 5
 const val IDLE_MAX = 120
@@ -78,7 +79,7 @@ private fun TimePill(text: String, onClick: () -> Unit) {
  * nên không còn chuyện kéo xong bị trả về giá trị cũ hay không biết đã lưu chưa.
  */
 @Composable
-fun NightScreen() {
+fun NightScreen(refreshKey: Int = 0) {
     val context = LocalContext.current
     val prefs = remember { Prefs.get(context) }
     val s by prefs.state.collectAsStateWithLifecycle()
@@ -102,8 +103,9 @@ fun NightScreen() {
         }
     }
     val lastInteraction by BedtimeAccessibilityService.lastInteraction.collectAsStateWithLifecycle()
-    val serviceOn = Permissions.isAccessibilityEnabled(context)
-    val t = LocalTime.now()
+    // Kiểm tra lại khi quay về app (vừa bật Trợ năng trong Cài đặt) và theo nhịp `now`.
+    val serviceOn = remember(refreshKey) { Permissions.isAccessibilityEnabled(context) }
+    val t = Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault()).toLocalTime()
     val inWindow = TimeRules.inWindow(s.nightStart, s.nightEnd, t.hour * 60 + t.minute)
 
     Column(Modifier.fillMaxSize()) {

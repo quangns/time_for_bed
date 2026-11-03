@@ -1,9 +1,11 @@
 package vn.quangns.timeforbed.alarm
 
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.core.content.ContextCompat
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -53,6 +55,18 @@ class AlarmRingActivity : ComponentActivity() {
             )
         }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+        // Mở từ thông báo dự phòng (dịch vụ chuông bị hệ thống chặn lúc báo thức kích hoạt):
+        // màn hình đang hiện nên được phép bật dịch vụ chuông ngay bây giờ.
+        val id = intent?.getIntExtra(AlarmReceiver.EXTRA_ID, -1) ?: -1
+        if (id >= 0 && !AlarmRingService.isRinging && savedInstanceState == null) {
+            runCatching {
+                ContextCompat.startForegroundService(
+                    this,
+                    Intent(this, AlarmRingService::class.java).setAction(AlarmRingService.ACTION_RING).putExtra(AlarmReceiver.EXTRA_ID, id),
+                )
+            }
+        }
 
         setContent {
             TimeForBedTheme {

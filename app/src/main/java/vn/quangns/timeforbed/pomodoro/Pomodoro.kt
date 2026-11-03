@@ -28,10 +28,15 @@ data class PomodoroState(
     val remainingMs: Long,
     val doneInCycle: Int,
     val todayCount: Int,
+    /** Ngày (yyyy-MM-dd) của [todayCount] — để giao diện tự về 0 khi qua nửa đêm. */
+    val todayDate: String,
     val settings: PomodoroSettings,
+    /** Tổng thời lượng của giai đoạn HIỆN TẠI, chốt lúc vào giai đoạn (đổi cài đặt giữa chừng không ảnh hưởng). */
+    val totalMs: Long,
 ) {
     fun remainingAt(now: Long): Long = if (running) (endAt - now).coerceAtLeast(0) else remainingMs
-    val totalMs: Long get() = PomodoroRules.durationMs(phase, settings)
+
+    fun todayCountOn(date: String): Int = if (todayDate == date) todayCount else 0
     /** Chưa chạy lần nào trong giai đoạn này (để hiện nút "Bắt đầu" thay vì "Tiếp tục"). */
     val fresh: Boolean get() = !running && remainingMs >= totalMs
 }
@@ -60,6 +65,7 @@ object Pomodoro {
     private const val K_LONG = "long_min"
     private const val K_LONG_EVERY = "long_every"
     private const val K_AUTO = "auto_start"
+    private const val K_PHASE_TOTAL = "phase_total"
 
     private var sp: SharedPreferences? = null
     private val _state = MutableStateFlow<PomodoroState?>(null)
@@ -93,14 +99,17 @@ object Pomodoro {
         )
         val phase = runCatching { Phase.valueOf(p.getString(K_PHASE, null) ?: "FOCUS") }.getOrDefault(Phase.FOCUS)
         val today = LocalDate.now().toString()
+        val total = p.getLong(K_PHASE_TOTAL, PomodoroRules.durationMs(phase, settings))
         return PomodoroState(
             phase = phase,
             running = p.getBoolean(K_RUNNING, false),
             endAt = p.getLong(K_END_AT, 0L),
-            remainingMs = p.getLong(K_REMAINING, PomodoroRules.durationMs(phase, settings)),
+            remainingMs = p.getLong(K_REMAINING, total).coerceAtMost(total),
             doneInCycle = p.getInt(K_DONE, 0),
             todayCount = if (p.getString(K_TODAY_DATE, "") == today) p.getInt(K_TODAY, 0) else 0,
+            todayDate = today,
             settings = settings,
+            totalMs = total,
         )
     }
 
@@ -143,11 +152,15 @@ object Pomodoro {
         write(context) {
             putString(K_PHASE, Phase.FOCUS.name)
             putBoolean(K_RUNNING, false)
-            putLong(K_REMAINING, PomodoroRules.durationMs(Phase.FOCUS, s.settings))
+            val focusMs = PomodoroRules.durationMs(Phase.FOCUS, s.settings)
+            putLong(K_REMAINING, focusMs)
+            putLong(K_PHASE_TOTAL, focusMs)
             putInt(K_DONE, 0)
         }
         cancelEnd(context)
-        context.getSystemService(NotificationManager::class.java).cancel(Notifications.ID_POMODORO)
+        val nm = context.getSystemService(NotificationManager::class.java)
+        nm.cancel(Notifications.ID_POMODORO)
+        nm.cancel(Notifications.ID_POMODORO_ALERT)
     }
 
     fun updateSettings(context: Context, settings: PomodoroSettings) {
@@ -159,7 +172,11 @@ object Pomodoro {
             putInt(K_LONG_EVERY, settings.longEvery)
             putBoolean(K_AUTO, settings.autoStart)
             // Chưa bắt đầu giai đoạn hiện tại thì áp dụng thời lượng mới ngay; đang chạy thì từ giai đoạn sau.
-            if (old.fresh) putLong(K_REMAINING, PomodoroRules.durationMs(old.phase, settings))
+            if (old.fresh) {
+                val ms = PomodoroRules.durationMs(old.phase, settings)
+                putLong(K_REMAINING, ms)
+                putLong(K_PHASE_TOTAL, ms)
+            }
         }
     }
 
@@ -198,6 +215,7 @@ object Pomodoro {
             putString(K_PHASE, nextPhase.name)
             putInt(K_DONE, done)
             putLong(K_REMAINING, nextMs)
+            putLong(K_PHASE_TOTAL, nextMs)
             putBoolean(K_RUNNING, false)
             if (finishedFocus) {
                 putString(K_TODAY_DATE, today)

@@ -28,11 +28,13 @@ object AlarmScheduler {
             cancel(context, alarm.id)
             return
         }
+        AlarmMirror.put(context, alarm)
         setAt(context, nextTriggerMillis(alarm), alarm.id, alarm.id, snooze = false)
     }
 
     fun scheduleSnooze(context: Context, alarm: AlarmEntity) {
         val at = System.currentTimeMillis() + alarm.snoozeMinutes * 60_000L
+        AlarmMirror.putSnooze(context, alarm.id, at)
         setAt(context, at, alarm.id + SNOOZE_OFFSET, alarm.id, snooze = true)
     }
 
@@ -40,10 +42,35 @@ object AlarmScheduler {
         val am = context.getSystemService(AlarmManager::class.java)
         am.cancel(firePending(context, alarmId, alarmId, false))
         am.cancel(firePending(context, alarmId + SNOOZE_OFFSET, alarmId, true))
+        AlarmMirror.remove(context, alarmId)
     }
 
+    /** Sau khi mở khóa: đồng bộ đầy đủ từ Room (kể cả tắt các báo thức một lần đã reo lúc máy còn khóa). */
     suspend fun rescheduleAll(context: Context) {
-        AppDatabase.get(context).alarmDao().getAll().forEach { schedule(context, it) }
+        val dao = AppDatabase.get(context).alarmDao()
+        AlarmMirror.firedOnce(context).mapNotNull { it.toIntOrNull() }.forEach { id ->
+            dao.get(id)?.let { if (it.daysMask and 0x7F == 0) dao.upsert(it.copy(enabled = false)) }
+        }
+        AlarmMirror.clearFiredOnce(context)
+        val now = System.currentTimeMillis()
+        val snoozes = AlarmMirror.snoozes(context)
+        dao.getAll().forEach { alarm ->
+            schedule(context, alarm)
+            snoozes[alarm.id]?.takeIf { it > now && alarm.enabled }?.let { at ->
+                setAt(context, at, alarm.id + SNOOZE_OFFSET, alarm.id, snooze = true)
+            }
+        }
+    }
+
+    /** Máy vừa khởi động, CHƯA mở khóa (Room chưa đọc được): đặt lại từ bản sao [AlarmMirror]. */
+    fun rescheduleFromMirror(context: Context) {
+        val now = System.currentTimeMillis()
+        val snoozes = AlarmMirror.snoozes(context)
+        AlarmMirror.defs(context).forEach { d ->
+            val alarm = AlarmEntity(id = d.id, hour = d.hour, minute = d.minute, daysMask = d.daysMask, snoozeMinutes = d.snoozeMinutes)
+            setAt(context, nextTriggerMillis(alarm), d.id, d.id, snooze = false)
+            snoozes[d.id]?.takeIf { it > now }?.let { setAt(context, it, d.id + SNOOZE_OFFSET, d.id, snooze = true) }
+        }
     }
 
     private fun setAt(context: Context, at: Long, requestCode: Int, alarmId: Int, snooze: Boolean) {

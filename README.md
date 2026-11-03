@@ -51,6 +51,8 @@ Không đụng tới app đồng hồ/báo thức và app trong danh sách loạ
 
 Báo thức dùng `AlarmManager.setAlarmClock()` và phát chuông trên luồng **ALARM**, nên không bị chính app tắt.
 
+**Độ tin cậy của báo thức**: một bản sao gọn của các báo thức được lưu ở vùng lưu trữ đọc được ngay khi máy khởi động. Nhờ vậy máy tự khởi động lại trong đêm mà chưa mở khóa thì báo thức vẫn được đặt lại và vẫn reo. Không mở được file nhạc chuông thì phát tiếng bíp của hệ thống. Khi chuông đang reo, đầu mỗi tab trong app có nút *Báo lại / Tắt*, kể cả khi thông báo bị chặn.
+
 ### Giới hạn
 
 - TikTok/app tương tự: tắt *phát nền* trong app đó thì khi bị đưa về màn hình chính âm thanh sẽ dừng. Nếu app vẫn phát nền, báo cáo sẽ ghi *Vẫn còn âm thanh từ một app chạy nền*.

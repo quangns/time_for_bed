@@ -11,6 +11,7 @@ import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.RingtoneManager
+import android.media.ToneGenerator
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
@@ -32,6 +33,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.LocalTime
 import vn.quangns.timeforbed.R
 import vn.quangns.timeforbed.core.Notifications
 
@@ -41,6 +43,7 @@ class AlarmRingService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val handler = Handler(Looper.getMainLooper())
     private var player: MediaPlayer? = null
+    private var tone: ToneGenerator? = null
     private var vibrator: Vibrator? = null
     private var current: AlarmEntity? = null
 
@@ -52,8 +55,12 @@ class AlarmRingService : Service() {
                 val id = intent.getIntExtra(AlarmReceiver.EXTRA_ID, -1)
                 startInForeground(null)
                 scope.launch {
-                    val alarm = withContext(Dispatchers.IO) { AppDatabase.get(applicationContext).alarmDao().get(id) }
-                        ?: AlarmEntity(id = id, hour = 0, minute = 0)
+                    // Máy chưa mở khóa thì Room chưa mở được → dùng bản sao, không có thì vẫn reo với mặc định.
+                    val alarm = withContext(Dispatchers.IO) {
+                        runCatching { AppDatabase.get(applicationContext).alarmDao().get(id) }.getOrNull()
+                    } ?: AlarmMirror.get(applicationContext, id)?.let {
+                        AlarmEntity(id = id, hour = it.hour, minute = it.minute, daysMask = it.daysMask, snoozeMinutes = it.snoozeMinutes)
+                    } ?: AlarmEntity(id = id, hour = LocalTime.now().hour, minute = LocalTime.now().minute)
                     ring(alarm)
                 }
             }
@@ -76,13 +83,13 @@ class AlarmRingService : Service() {
 
     private fun ring(alarm: AlarmEntity) {
         stopSound()
+        handler.removeCallbacksAndMessages(null) // trước playSound để không xoá vòng bíp dự phòng
         current = alarm
         _ringing.value = alarm
         isRinging = true
         getSystemService(NotificationManager::class.java).notify(Notifications.ID_ALARM_RING, buildNotification(alarm))
         playSound(alarm.ringtoneUri?.let(Uri::parse))
         if (alarm.vibrate) vibrate()
-        handler.removeCallbacksAndMessages(null)
         handler.postDelayed({ finish() }, AUTO_STOP_MS)
     }
 
@@ -119,6 +126,20 @@ class AlarmRingService : Service() {
                 player = null
             }
         }
+        // Không mở được file chuông nào (vd máy chưa mở khóa nên chưa đọc được nhạc chuông): bíp bằng tiếng hệ thống.
+        startFallbackBeep()
+    }
+
+    private val beepTick = object : Runnable {
+        override fun run() {
+            tone?.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 1_000)
+            handler.postDelayed(this, 1_500)
+        }
+    }
+
+    private fun startFallbackBeep() {
+        tone = runCatching { ToneGenerator(AudioManager.STREAM_ALARM, ToneGenerator.MAX_VOLUME) }.getOrNull() ?: return
+        handler.post(beepTick)
     }
 
     private fun vibrate() {
@@ -133,6 +154,9 @@ class AlarmRingService : Service() {
     }
 
     private fun stopSound() {
+        handler.removeCallbacks(beepTick)
+        tone?.release()
+        tone = null
         player?.runCatching { stop() }
         player?.release()
         player = null

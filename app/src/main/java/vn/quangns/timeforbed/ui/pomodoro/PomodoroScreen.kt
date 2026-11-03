@@ -70,6 +70,8 @@ fun PomodoroScreen() {
         }
     }
     val remaining = s.remainingAt(now)
+    // Tính lại theo ngày hiện tại để qua nửa đêm thì tự về 0 dù màn hình vẫn mở.
+    val todayCount = s.todayCountOn(java.time.LocalDate.now().toString())
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 16.dp),
@@ -134,8 +136,8 @@ fun PomodoroScreen() {
         }
 
         Text(
-            if (s.todayCount == 0) "Hôm nay chưa xong phiên tập trung nào."
-            else "Hôm nay: ${s.todayCount} phiên tập trung (${s.todayCount * s.settings.focusMin} phút).",
+            if (todayCount == 0) "Hôm nay chưa xong phiên tập trung nào."
+            else "Hôm nay: $todayCount phiên tập trung.",
             style = MaterialTheme.typography.bodySmall,
             color = Night.Mist,
             modifier = Modifier.align(Alignment.CenterHorizontally),

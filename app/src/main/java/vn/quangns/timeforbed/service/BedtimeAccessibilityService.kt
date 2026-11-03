@@ -115,7 +115,13 @@ class BedtimeAccessibilityService : AccessibilityService() {
         )
         if (delay != null) handler.postDelayed(tick, delay)
         nextCheckAt = if (delay != null) now + delay else 0L
+        // Handler dùng đồng hồ uptime, đứng yên khi CPU ngủ sâu (màn hình tắt, nhạc phát kiểu offload).
+        // Lúc màn hình tắt thì hẹn thêm bằng AlarmManager để chắc chắn được đánh thức đúng giờ.
+        if (delay != null && !screenOn) NightCheckReceiver.schedule(this, now + delay) else NightCheckReceiver.cancel(this)
     }
+
+    /** Được [NightCheckReceiver] gọi khi AlarmManager đánh thức lúc màn hình tắt. */
+    fun runScheduledCheck() = tick.run()
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
@@ -123,9 +129,10 @@ class BedtimeAccessibilityService : AccessibilityService() {
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
                 // Thông báo nổi/heads-up của SystemUI tự xuất hiện, không phải thao tác người dùng.
+                // Cùng app tự mở màn mới (quảng cáo, tự phát video kế) cũng không tính — chỉ khi đổi app.
                 if (pkg != null && pkg != SYSTEM_UI) {
+                    if (pkg != foregroundPackage) markInteraction()
                     foregroundPackage = pkg
-                    markInteraction()
                 }
             }
             AccessibilityEvent.TYPE_VIEW_CLICKED,
@@ -145,6 +152,7 @@ class BedtimeAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
+        NightCheckReceiver.cancel(this)
         scope.cancel()
         runCatching { unregisterReceiver(screenReceiver) }
         runCatching { getSystemService(AudioManager::class.java)?.unregisterAudioPlaybackCallback(playbackCallback) }

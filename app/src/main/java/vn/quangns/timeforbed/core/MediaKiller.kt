@@ -120,7 +120,11 @@ object MediaKiller {
         val sendKey = !ringing && !excludedPlaying && (targets.isNotEmpty() || musicBefore)
         if (sendKey && am != null) sendPauseKey(am)
 
-        val focus = if (!ringing && am != null) grabAudioFocus(am) else null
+        // Giành focus làm app đang giữ focus mất hẳn quyền phát → bỏ qua nếu app loại trừ đang phát
+        // (vd app tiếng ồn trắng được cho phép chạy cả đêm) hoặc không có gì đang phát.
+        val focus = if (!ringing && !excludedPlaying && am != null && (targets.isNotEmpty() || musicBefore)) {
+            grabAudioFocus(am)
+        } else null
 
         // Về màn hình chính + khóa máy sau một nhịp để lệnh pause kịp tới các app.
         var locked = false
