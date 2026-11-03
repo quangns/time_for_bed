@@ -3,7 +3,6 @@ package vn.quangns.timeforbed
 import android.content.Context
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -42,16 +41,16 @@ class NightScreenTest {
 
     @Test
     fun changes_areDraft_untilSave() {
-        compose.onNodeWithText("Đã lưu").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("Lưu thay đổi").assertDoesNotExist() // chưa đổi gì: không hiện thanh Lưu
 
         compose.onNode(isToggleable()).performClick() // tắt chế độ ban đêm
         assertEquals(true, prefs.nightEnabled) // chưa lưu
 
-        compose.onNodeWithText("Lưu thay đổi").performScrollTo().performClick()
+        compose.onNodeWithText("Lưu thay đổi").assertIsDisplayed().performClick()
         compose.waitForIdle()
         assertEquals(false, prefs.nightEnabled)
         assertEquals(false, raw.getBoolean("night_enabled", true)) // đã ghi xuống bộ nhớ
-        compose.onNodeWithText("Đã lưu").assertIsDisplayed()
+        compose.onNodeWithText("Lưu thay đổi").assertDoesNotExist() // đã lưu: thanh Lưu ẩn đi
     }
 
     @Test
@@ -64,7 +63,7 @@ class NightScreenTest {
         compose.onNodeWithText("60").assertIsDisplayed()
         assertEquals(30, prefs.idleMinutes) // chưa lưu
 
-        compose.onNodeWithText("Lưu thay đổi").performScrollTo().performClick()
+        compose.onNodeWithText("Lưu thay đổi").assertIsDisplayed().performClick()
         compose.waitForIdle()
         assertEquals(60, prefs.idleMinutes)
         assertEquals(60, raw.getInt("idle_minutes", 0))
@@ -81,7 +80,7 @@ class NightScreenTest {
             up()
         }
         compose.onNodeWithText("90").assertIsDisplayed()
-        compose.onNodeWithText("Hoàn tác").performScrollTo().performClick()
+        compose.onNodeWithText("Hoàn tác").assertIsDisplayed().performClick()
         compose.onNodeWithText("30").assertIsDisplayed()
         assertEquals(30, prefs.idleMinutes)
     }

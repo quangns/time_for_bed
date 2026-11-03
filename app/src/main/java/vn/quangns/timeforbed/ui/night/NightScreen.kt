@@ -1,6 +1,11 @@
 package vn.quangns.timeforbed.ui.night
 
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -101,106 +106,114 @@ fun NightScreen() {
     val t = LocalTime.now()
     val inWindow = TimeRules.inWindow(s.nightStart, s.nightEnd, t.hour * 60 + t.minute)
 
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(28.dp),
-    ) {
-        ScreenHeader(
-            "Ban đêm",
-            subtitle = "Ngủ quên khi đang xem? Quá $idle phút không chạm vào máy trong khung giờ này, " +
-                "app sẽ tạm dừng video, nhạc rồi khóa màn hình. Báo trước 1 phút.",
-        )
+    Column(Modifier.fillMaxSize()) {
+        Column(
+            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(28.dp),
+        ) {
+            ScreenHeader(
+                "Ban đêm",
+                subtitle = "Ngủ quên khi đang xem? Quá $idle phút không chạm vào máy trong khung giờ này, " +
+                    "app sẽ tạm dừng video, nhạc rồi khóa màn hình. Báo trước 1 phút.",
+            )
 
-        // Trạng thái theo giá trị ĐÃ LƯU: chấm xanh = đang theo dõi, chấm cam = cần xử lý.
-        val watching = s.nightEnabled && serviceOn && inWindow
-        val status = when {
-            !s.nightEnabled -> "Đang tắt"
-            !serviceOn -> "Chưa bật Trợ năng, chế độ ban đêm chưa hoạt động"
-            inWindow -> "Đang theo dõi"
-            else -> "Chờ đến " + TimeRules.formatMinuteOfDay(s.nightStart)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            StatusDot(ok = s.nightEnabled && serviceOn)
-            Spacer(Modifier.width(10.dp))
-            Column {
-                Text(status, style = MaterialTheme.typography.bodyLarge)
-                if (serviceOn && watching) {
-                    val mins = ((now - lastInteraction) / 60_000).coerceAtLeast(0)
-                    Text(
-                        "Thao tác gần nhất " + if (mins == 0L) "vừa xong" else "$mins phút trước",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Night.Mist,
-                    )
+            // Trạng thái theo giá trị ĐÃ LƯU: chấm xanh = đang theo dõi, chấm cam = cần xử lý.
+            val watching = s.nightEnabled && serviceOn && inWindow
+            val status = when {
+                !s.nightEnabled -> "Đang tắt"
+                !serviceOn -> "Chưa bật Trợ năng, chế độ ban đêm chưa hoạt động"
+                inWindow -> "Đang theo dõi"
+                else -> "Chờ đến " + TimeRules.formatMinuteOfDay(s.nightStart)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                StatusDot(ok = s.nightEnabled && serviceOn)
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text(status, style = MaterialTheme.typography.bodyLarge)
+                    if (serviceOn && watching) {
+                        val mins = ((now - lastInteraction) / 60_000).coerceAtLeast(0)
+                        Text(
+                            "Thao tác gần nhất " + if (mins == 0L) "vừa xong" else "$mins phút trước",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Night.Mist,
+                        )
+                    }
                 }
             }
-        }
 
-        SectionCard("Tự tắt khi ngủ quên") {
-            SettingRow("Bật chế độ ban đêm") {
-                NightSwitch(checked = enabled, onCheckedChange = { enabled = it })
-            }
-            Hairline()
-            SettingRow(
-                "Khung giờ",
-                description = if (start == end) "Giờ bắt đầu trùng giờ kết thúc: áp dụng cả ngày"
-                else "Có thể vắt qua nửa đêm, ví dụ 23:00 – 06:00",
-            ) {
-                TimePill(TimeRules.formatMinuteOfDay(start)) { pick = "start" }
-                Text("–", color = Night.Mist, modifier = Modifier.padding(horizontal = 6.dp))
-                TimePill(TimeRules.formatMinuteOfDay(end)) { pick = "end" }
-            }
-            Hairline()
-            Text(
-                "Không thao tác quá",
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(top = 12.dp),
-            )
-            Text(
-                "Kéo quanh vòng để chọn $IDLE_MIN–$IDLE_MAX phút",
-                style = MaterialTheme.typography.bodySmall,
-                color = Night.Mist,
-            )
-            DialRing(
-                value = idle,
-                max = IDLE_MAX,
-                onValueChange = { idle = it },
-                description = "Vòng chọn thời gian không thao tác, $idle phút",
-                step = IDLE_STEP,
-                minValue = IDLE_MIN,
-                maxWidth = 240.dp,
-                centerRatio = 0.6f,
-                modifier = Modifier.align(Alignment.CenterHorizontally).padding(vertical = 8.dp).testTag("idleDial"),
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("$idle", style = MaterialTheme.typography.displayMedium, color = Night.Moonlight)
-                    Text("phút", style = MaterialTheme.typography.bodySmall, color = Night.Mist)
+            SectionCard("Tự tắt khi ngủ quên") {
+                SettingRow("Bật chế độ ban đêm") {
+                    NightSwitch(checked = enabled, onCheckedChange = { enabled = it })
+                }
+                Hairline()
+                SettingRow(
+                    "Khung giờ",
+                    description = if (start == end) "Giờ bắt đầu trùng giờ kết thúc: áp dụng cả ngày"
+                    else "Có thể vắt qua nửa đêm, ví dụ 23:00 – 06:00",
+                ) {
+                    TimePill(TimeRules.formatMinuteOfDay(start)) { pick = "start" }
+                    Text("–", color = Night.Mist, modifier = Modifier.padding(horizontal = 6.dp))
+                    TimePill(TimeRules.formatMinuteOfDay(end)) { pick = "end" }
+                }
+                Hairline()
+                Text(
+                    "Không thao tác quá",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+                Text(
+                    "Kéo quanh vòng để chọn $IDLE_MIN–$IDLE_MAX phút",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Night.Mist,
+                )
+                DialRing(
+                    value = idle,
+                    max = IDLE_MAX,
+                    onValueChange = { idle = it },
+                    description = "Vòng chọn thời gian không thao tác, $idle phút",
+                    step = IDLE_STEP,
+                    minValue = IDLE_MIN,
+                    maxWidth = 210.dp,
+                    centerRatio = 0.6f,
+                    modifier = Modifier.align(Alignment.CenterHorizontally).padding(vertical = 8.dp).testTag("idleDial"),
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("$idle", style = MaterialTheme.typography.displayMedium, color = Night.Moonlight)
+                        Text("phút", style = MaterialTheme.typography.bodySmall, color = Night.Mist)
+                    }
                 }
             }
+
         }
 
-        Column(Modifier.fillMaxWidth()) {
-            Button(
-                onClick = {
-                    prefs.saveNight(enabled, start, end, idle)
-                    Toast.makeText(context, "Đã lưu cài đặt ban đêm", Toast.LENGTH_SHORT).show()
-                },
-                enabled = dirty,
-                shape = MaterialTheme.shapes.medium,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Night.Green,
-                    contentColor = Night.Ink,
-                    disabledContainerColor = Night.Raised,
-                    disabledContentColor = Night.Mist,
-                ),
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-            ) { Text(if (dirty) "Lưu thay đổi" else "Đã lưu") }
-            if (dirty) {
-                TextButton(
-                    onClick = {
-                        enabled = s.nightEnabled; start = s.nightStart; end = s.nightEnd; idle = s.idleMinutes
-                    },
-                    modifier = Modifier.align(Alignment.CenterHorizontally),
-                ) { Text("Hoàn tác", color = Night.Mist) }
+        // Thanh Lưu ghim ở đáy, ngoài vùng cuộn: đổi gì là thấy ngay, không phải cuộn xuống
+        // (vuốt trên vòng tròn chỉ đổi số phút, không cuộn trang).
+        AnimatedVisibility(visible = dirty, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+            Surface(color = Night.Surface, modifier = Modifier.fillMaxWidth()) {
+                Column {
+                    Hairline()
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        TextButton(
+                            onClick = {
+                                enabled = s.nightEnabled; start = s.nightStart; end = s.nightEnd; idle = s.idleMinutes
+                            },
+                            modifier = Modifier.height(52.dp),
+                        ) { Text("Hoàn tác", color = Night.Mist) }
+                        Button(
+                            onClick = {
+                                prefs.saveNight(enabled, start, end, idle)
+                                Toast.makeText(context, "Đã lưu cài đặt ban đêm", Toast.LENGTH_SHORT).show()
+                            },
+                            shape = MaterialTheme.shapes.medium,
+                            colors = ButtonDefaults.buttonColors(containerColor = Night.Green, contentColor = Night.Ink),
+                            modifier = Modifier.weight(1f).height(52.dp),
+                        ) { Text("Lưu thay đổi") }
+                    }
+                }
             }
         }
     }
