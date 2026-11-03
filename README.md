@@ -6,6 +6,7 @@
 
 - **Hẹn giờ ngủ**: kéo vòng tròn chọn 0–60 phút, bấm nút tròn xanh **Bắt đầu**; giữa vòng hiện đếm ngược đến từng giây. Hết giờ thì dừng mọi video/nhạc, về màn hình chính và khóa máy. Báo trước 1 phút, có nút **+10 phút** ngay trên thông báo.
 - **Tự tắt khi ngủ quên**: trong khung giờ đêm (mặc định **00:00–06:00**), nếu quá **30 phút** không chạm/thao tác thì tự dừng video/nhạc và khóa máy. Khung giờ và ngưỡng chỉnh được, hỗ trợ khung vắt qua nửa đêm (vd 23:00–06:00).
+- **Pomodoro**: tập trung 25 phút, nghỉ 5 phút, sau 4 phiên nghỉ dài 15 phút (đổi được). Vòng tròn đếm ngược, tạm dừng/bỏ qua ngay trên thông báo; chạy nền bằng AlarmManager, không giữ service nên đỡ tốn pin; báo hết giai đoạn bằng âm thanh thông báo, không đụng âm lượng.
 - **Báo thức**: nhiều báo thức, lặp theo thứ, chọn chuông, rung, báo lại 5/10/15 phút; reo toàn màn hình cả khi máy đang khóa; tự đặt lại sau khi khởi động lại máy.
 - **Ngoại lệ**: không bao giờ đụng tới app đồng hồ/báo thức và các app ngân hàng, ví điện tử (tự gợi ý VCB, BIDV, VietinBank, MB, Techcombank, VNPT Money, MoMo, ZaloPay…; thêm/bớt được trong tab Cài đặt).
 
