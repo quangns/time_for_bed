@@ -42,6 +42,7 @@ import java.time.LocalTime
 import vn.quangns.timeforbed.MainActivity
 import vn.quangns.timeforbed.R
 import vn.quangns.timeforbed.core.Notifications
+import vn.quangns.timeforbed.service.BedtimeAccessibilityService
 
 /** Phát chuông báo thức (luồng ALARM), rung, và hiện màn hình báo thức toàn màn hình. */
 class AlarmRingService : Service() {
@@ -97,9 +98,24 @@ class AlarmRingService : Service() {
         _ringing.value = alarm
         isRinging = true
         getSystemService(NotificationManager::class.java).notify(Notifications.ID_ALARM_RING, buildNotification(alarm))
+        showRingScreen()
         playSound(alarm.ringtoneUri?.let(Uri::parse))
         if (alarm.vibrate) vibrate()
         handler.postDelayed({ finish() }, AUTO_STOP_MS)
+    }
+
+    /**
+     * Mở thẳng màn hình báo thức, kể cả khi đang dùng máy ở màn hình chính.
+     * Thông báo toàn màn hình chỉ tự bật màn hình báo thức khi máy đang tắt màn hình/khoá; lúc đang dùng máy
+     * hệ thống chỉ hiện một thông báo nhỏ (dễ bị ẩn nếu chưa cấp quyền) nên người dùng phải mở app mới tắt được.
+     * Android cho phép mở màn hình từ nền khi app có dịch vụ Trợ năng đang chạy hoặc có quyền
+     * "Hiển thị trên ứng dụng khác"; thiếu cả hai thì vẫn còn thông báo toàn màn hình như trước.
+     */
+    private fun showRingScreen() {
+        val intent = Intent(this, AlarmRingActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_USER_ACTION)
+        val launcher: Context = BedtimeAccessibilityService.instance ?: this
+        runCatching { launcher.startActivity(intent) }.onFailure { Log.w(TAG, "Không mở được màn hình báo thức", it) }
     }
 
     private fun playSound(custom: Uri?) {

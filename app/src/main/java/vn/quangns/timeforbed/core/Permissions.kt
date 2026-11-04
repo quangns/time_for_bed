@@ -28,6 +28,10 @@ enum class PermissionItem(val title: String, val why: String) {
     POST_NOTIFICATIONS("Hiển thị thông báo", "Hiện đếm ngược, cảnh báo và chuông báo thức"),
     EXACT_ALARM("Báo thức chính xác", "Hẹn giờ và báo thức đúng phút"),
     FULL_SCREEN("Hiện toàn màn hình", "Màn hình báo thức hiện lên cả khi máy đang khóa"),
+    OVERLAY(
+        "Hiển thị trên ứng dụng khác",
+        "Màn hình báo thức tự bật lên cả khi đang dùng máy, không phải mở app mới tắt được",
+    ),
     BATTERY("Bỏ tối ưu pin", "Không bị hệ thống tắt khi chạy nền qua đêm"),
 }
 
@@ -45,6 +49,7 @@ object Permissions {
         PermissionItem.FULL_SCREEN ->
             Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE ||
                 context.getSystemService(NotificationManager::class.java).canUseFullScreenIntent()
+        PermissionItem.OVERLAY -> Settings.canDrawOverlays(context)
         PermissionItem.BATTERY ->
             context.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(context.packageName)
     }
@@ -72,6 +77,7 @@ object Permissions {
                 .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
             PermissionItem.EXACT_ALARM -> Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, pkgUri)
             PermissionItem.FULL_SCREEN -> Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, pkgUri)
+            PermissionItem.OVERLAY -> Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, pkgUri)
             PermissionItem.BATTERY -> Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkgUri)
         }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }

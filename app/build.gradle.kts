@@ -15,8 +15,8 @@ android {
         applicationId = "vn.quangns.timeforbed"
         minSdk = 26
         targetSdk = 35
-        versionCode = 13
-        versionName = "1.4.0"
+        versionCode = 14
+        versionName = "1.4.1"
     }
 
     // Khóa ký release: keystore.properties ở gốc repo (không commit), hoặc bản lưu cố định cạnh file khóa ở

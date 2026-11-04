@@ -27,6 +27,7 @@ Giao diện theo [DESIGN.md](DESIGN.md) — phong cách "nửa đêm tĩnh lặn
 | Hiển thị thông báo | Đếm ngược, cảnh báo, chuông báo thức |
 | Báo thức chính xác (Android 12) | Hẹn giờ/báo thức đúng phút |
 | Hiện toàn màn hình (Android 14+) | Màn hình báo thức trên màn hình khóa |
+| Hiển thị trên ứng dụng khác | Màn hình báo thức tự bật lên cả khi đang dùng máy (dự phòng khi Trợ năng chưa bật) |
 | Bỏ tối ưu pin | Không bị hệ thống tắt khi chạy nền qua đêm |
 
 > **Android 13+ không bật được Trợ năng / Truy cập thông báo?** Đây là chặn "cài đặt bị hạn chế" với app cài ngoài CH Play. Vào *Cài đặt → Ứng dụng → Time for Bed → menu ⋮ → Cho phép cài đặt bị hạn chế*, rồi bật lại.
