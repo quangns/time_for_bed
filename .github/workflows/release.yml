@@ -1,0 +1,58 @@
+name: Phát hành APK
+
+# Push tag v<phiên bản> (vd v1.4.0) → tạo GitHub Release và đính kèm releases/TimeForBed-<phiên bản>.apk
+# đã build + ký sẵn trong repo. Dùng GITHUB_TOKEN của chính workflow, không cần token cá nhân.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag cần phát hành, vd v1.4.0"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Tạo Release và đính kèm APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          VER="${TAG#v}"
+          APK="releases/TimeForBed-${VER}.apk"
+          test -f "$APK" || { echo "Thiếu $APK"; exit 1; }
+          (cd releases && sha256sum -c "TimeForBed-${VER}.apk.sha256")
+          NOTES="releases/notes/${TAG}.md"
+          [ -f "$NOTES" ] || NOTES=/dev/null
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" --clobber
+          else
+            gh release create "$TAG" "$APK" --title "Time for Bed ${VER}" --notes-file "$NOTES" --latest
+          fi
+          gh release view "$TAG" --json url,tagName,assets --jq '{url, tagName, assets: [.assets[] | {name, size}]}' > /tmp/release.json
+          cat /tmp/release.json
+
+      - name: Ghi kết quả vào nhánh ci-status
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          cp /tmp/release.json /tmp/out.json
+          git checkout --orphan ci-status-tmp
+          git rm -rf --quiet . || true
+          cp /tmp/out.json "release-${TAG}.json"
+          git add "release-${TAG}.json"
+          git commit -qm "Kết quả phát hành ${TAG}"
+          git push -f origin HEAD:ci-status
