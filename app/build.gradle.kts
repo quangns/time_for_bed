@@ -19,8 +19,13 @@ android {
         versionName = "1.4.0"
     }
 
-    // Khóa ký release đọc từ keystore.properties (không commit). Thiếu file thì release không ký.
-    val keystoreProps = rootProject.file("keystore.properties").takeIf { it.exists() }?.let { f ->
+    // Khóa ký release: keystore.properties ở gốc repo (không commit), hoặc bản lưu cố định cạnh file khóa ở
+    // ../.toolchain/keys (ngoài repo — clone lại repo không mất). Thiếu cả hai thì release không ký.
+    val keystoreFile = listOf(
+        rootProject.file("keystore.properties"),
+        rootProject.file("../.toolchain/keys/timeforbed-release.properties"),
+    ).firstOrNull { it.exists() }
+    val keystoreProps = keystoreFile?.let { f ->
         Properties().apply { f.inputStream().use { load(it) } }
     }
     signingConfigs {
