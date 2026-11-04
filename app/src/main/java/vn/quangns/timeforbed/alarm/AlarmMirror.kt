@@ -11,7 +11,21 @@ import androidx.core.content.edit
  * đặt lại và vẫn reo sau khi máy tự khởi động lại trong đêm.
  */
 object AlarmMirror {
-    data class Def(val id: Int, val hour: Int, val minute: Int, val daysMask: Int, val snoozeMinutes: Int)
+    data class Def(
+        val id: Int,
+        val hour: Int,
+        val minute: Int,
+        val daysMask: Int,
+        val snoozeMinutes: Int,
+        val wakeCheck: Boolean = false,
+        val wakeCheckMinutes: Int = 5,
+        val wakeMoveSeconds: Int = 60,
+    ) {
+        fun toEntity() = AlarmEntity(
+            id = id, hour = hour, minute = minute, daysMask = daysMask, snoozeMinutes = snoozeMinutes,
+            wakeCheck = wakeCheck, wakeCheckMinutes = wakeCheckMinutes, wakeMoveSeconds = wakeMoveSeconds,
+        )
+    }
 
     private fun sp(context: Context): SharedPreferences =
         context.createDeviceProtectedStorageContext().getSharedPreferences("alarm_mirror", Context.MODE_PRIVATE)
@@ -20,7 +34,10 @@ object AlarmMirror {
         context.getSystemService(UserManager::class.java)?.isUserUnlocked ?: true
 
     fun put(context: Context, a: AlarmEntity) = sp(context).edit {
-        putString("def:${a.id}", "${a.hour}|${a.minute}|${a.daysMask}|${a.snoozeMinutes}")
+        putString(
+            "def:${a.id}",
+            "${a.hour}|${a.minute}|${a.daysMask}|${a.snoozeMinutes}|${if (a.wakeCheck) 1 else 0}|${a.wakeCheckMinutes}|${a.wakeMoveSeconds}",
+        )
     }
 
     fun remove(context: Context, alarmId: Int) = sp(context).edit {
@@ -51,6 +68,12 @@ object AlarmMirror {
     private fun parse(id: Int, raw: String?): Def? {
         val p = raw?.split('|')?.mapNotNull { it.toIntOrNull() } ?: return null
         if (p.size < 4) return null
-        return Def(id, p[0], p[1], p[2], p[3])
+        // Bản cũ (≤1.3.2) chỉ có 4 trường; thiếu thì dùng mặc định.
+        return Def(
+            id, p[0], p[1], p[2], p[3],
+            wakeCheck = p.getOrNull(4) == 1,
+            wakeCheckMinutes = p.getOrNull(5) ?: 5,
+            wakeMoveSeconds = p.getOrNull(6) ?: 60,
+        )
     }
 }

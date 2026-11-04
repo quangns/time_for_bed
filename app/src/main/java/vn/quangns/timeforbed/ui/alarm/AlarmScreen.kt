@@ -86,6 +86,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import vn.quangns.timeforbed.alarm.AlarmEntity
 import vn.quangns.timeforbed.alarm.AlarmScheduler
+import vn.quangns.timeforbed.alarm.WakeCheckRules
 import vn.quangns.timeforbed.alarm.AppDatabase
 import vn.quangns.timeforbed.alarm.DAY_PRESETS
 import vn.quangns.timeforbed.alarm.DAY_SHORT
@@ -271,7 +272,8 @@ internal fun AlarmRow(
                     color = if (alarm.enabled) Night.Moonlight else Night.Mist.copy(alpha = 0.6f),
                 )
                 Text(
-                    listOf(alarm.label, alarm.daysText()).filter { it.isNotBlank() }.joinToString(" · "),
+                    listOf(alarm.label, alarm.daysText(), if (alarm.wakeCheck) "Chống ngủ lại" else "")
+                        .filter { it.isNotBlank() }.joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
                     color = Night.Mist,
                 )
@@ -329,11 +331,15 @@ internal fun AlarmEditor(
     var vibrate by remember { mutableStateOf(initial.vibrate) }
     var snooze by remember { mutableIntStateOf(initial.snoozeMinutes) }
     var ringtone by remember { mutableStateOf(initial.ringtoneUri) }
+    var wakeCheck by remember { mutableStateOf(initial.wakeCheck) }
+    var wakeMinutes by remember { mutableIntStateOf(initial.wakeCheckMinutes) }
+    var wakeSeconds by remember { mutableIntStateOf(initial.wakeMoveSeconds) }
     val now = rememberNow()
 
     val draft = initial.copy(
         hour = hour, minute = minute, daysMask = days, label = label.trim(),
         vibrate = vibrate, snoozeMinutes = snooze, ringtoneUri = ringtone, enabled = true,
+        wakeCheck = wakeCheck, wakeCheckMinutes = wakeMinutes, wakeMoveSeconds = wakeSeconds,
     )
     val untilMs = AlarmScheduler.nextTriggerMillis(draft, now) - now
 
@@ -416,6 +422,48 @@ internal fun AlarmEditor(
                                     selectedLabelColor = Night.Green,
                                 ),
                             )
+                        }
+                    }
+                }
+
+                SectionCard(
+                    "Chống ngủ lại",
+                    subtitle = "Tắt chuông xong, trong $wakeMinutes phút phải cầm máy đi lại đủ $wakeSeconds giây. " +
+                        "Không đủ thì chuông reo lại (tối đa ${WakeCheckRules.MAX_RINGS_AGAIN} lần).",
+                ) {
+                    SettingRow("Kiểm tra đã dậy", description = "Dùng cảm biến chuyển động, không cần cấp thêm quyền") {
+                        NightSwitch(checked = wakeCheck, onCheckedChange = { wakeCheck = it })
+                    }
+                    if (wakeCheck) {
+                        Hairline()
+                        Text("Thời gian kiểm tra", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 12.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp, bottom = 8.dp)) {
+                            WakeCheckRules.WINDOW_MINUTES.forEach { m ->
+                                FilterChip(
+                                    selected = wakeMinutes == m,
+                                    onClick = { wakeMinutes = m },
+                                    label = { Text("$m phút") },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = Night.Green.copy(alpha = 0.16f),
+                                        selectedLabelColor = Night.Green,
+                                    ),
+                                )
+                            }
+                        }
+                        Hairline()
+                        Text("Mức vận động", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 12.dp))
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
+                            WakeCheckRules.LEVELS.forEach { (sec, name) ->
+                                FilterChip(
+                                    selected = wakeSeconds == sec,
+                                    onClick = { wakeSeconds = sec },
+                                    label = { Text("$name · $sec giây") },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = Night.Green.copy(alpha = 0.16f),
+                                        selectedLabelColor = Night.Green,
+                                    ),
+                                )
+                            }
                         }
                     }
                 }

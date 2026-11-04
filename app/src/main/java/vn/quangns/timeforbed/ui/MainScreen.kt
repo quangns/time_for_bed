@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -50,6 +51,7 @@ import vn.quangns.timeforbed.core.Permissions
 import vn.quangns.timeforbed.ui.alarm.AlarmScreen
 import vn.quangns.timeforbed.MainActivity
 import vn.quangns.timeforbed.alarm.AlarmRingService
+import vn.quangns.timeforbed.alarm.WakeCheckState
 import vn.quangns.timeforbed.ui.night.NightScreen
 import vn.quangns.timeforbed.ui.pomodoro.PomodoroScreen
 import vn.quangns.timeforbed.ui.settings.SettingsScreen
@@ -132,6 +134,8 @@ fun MainScreen(tabRequest: MutableIntState) {
             // Luôn có cách tắt chuông ngay trong app, kể cả khi thông báo bị chặn.
             val ringing by AlarmRingService.ringing.collectAsStateWithLifecycle()
             ringing?.let { RingingBanner(it.snoozeMinutes) }
+            val wake by AlarmRingService.wakeCheck.collectAsStateWithLifecycle()
+            wake?.let { WakeCheckBanner(it) }
             if (missing.isNotEmpty() && tab != TAB_SETTINGS) {
                 MissingPermissionBanner(missing.size) { tab = TAB_SETTINGS }
             }
@@ -186,6 +190,34 @@ private fun RingingBanner(snoozeMinutes: Int) {
             TextButton(onClick = { AlarmRingService.send(context, AlarmRingService.ACTION_DISMISS) }) {
                 Text("Tắt", color = Night.Ink, style = MaterialTheme.typography.titleMedium)
             }
+        }
+    }
+}
+
+/** Đang kiểm tra chống ngủ lại: tiến độ vận động và thời gian còn lại. */
+@Composable
+private fun WakeCheckBanner(s: WakeCheckState) {
+    val left = s.remainingMs / 1_000
+    Surface(
+        color = Night.Surface,
+        shape = MaterialTheme.shapes.medium,
+        border = BorderStroke(1.dp, Night.Green),
+        modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 12.dp),
+    ) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Text("Chống ngủ lại: cầm máy đi lại", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Đã vận động ${s.activeSeconds}/${s.requiredSeconds} giây · còn %d:%02d".format(left / 60, left % 60),
+                style = MaterialTheme.typography.bodySmall,
+                color = Night.Mist,
+                modifier = Modifier.padding(top = 2.dp, bottom = 8.dp),
+            )
+            LinearProgressIndicator(
+                progress = { (s.activeSeconds.toFloat() / s.requiredSeconds).coerceIn(0f, 1f) },
+                color = Night.Green,
+                trackColor = Night.Raised,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }

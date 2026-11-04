@@ -1,6 +1,9 @@
 package vn.quangns.timeforbed.alarm
 
 import android.content.Context
+import androidx.annotation.VisibleForTesting
+import androidx.room.AutoMigration
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Delete
@@ -25,6 +28,12 @@ data class AlarmEntity(
     val ringtoneUri: String? = null,
     val vibrate: Boolean = true,
     val snoozeMinutes: Int = 5,
+    /** Chống ngủ lại: sau khi tắt chuông phải cầm máy vận động đủ, không thì reo lại. */
+    @ColumnInfo(defaultValue = "0") val wakeCheck: Boolean = false,
+    /** Thời gian kiểm tra sau khi tắt chuông (phút). */
+    @ColumnInfo(defaultValue = "5") val wakeCheckMinutes: Int = 5,
+    /** Số giây vận động cần đạt trong thời gian kiểm tra. */
+    @ColumnInfo(defaultValue = "60") val wakeMoveSeconds: Int = 60,
 )
 
 @Dao
@@ -45,13 +54,25 @@ interface AlarmDao {
     suspend fun delete(alarm: AlarmEntity)
 }
 
-@Database(entities = [AlarmEntity::class], version = 1, exportSchema = true)
+@Database(
+    entities = [AlarmEntity::class],
+    version = 2,
+    exportSchema = true,
+    autoMigrations = [AutoMigration(from = 1, to = 2)], // v2: thêm 3 cột chống ngủ lại
+)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun alarmDao(): AlarmDao
 
     companion object {
         @Volatile
         private var instance: AppDatabase? = null
+
+        /** Chỉ dùng trong test: Robolectric tạo Application (và thư mục dữ liệu) mới cho mỗi test. */
+        @VisibleForTesting
+        fun resetForTest() {
+            instance?.close()
+            instance = null
+        }
 
         fun get(context: Context): AppDatabase =
             instance ?: synchronized(this) {

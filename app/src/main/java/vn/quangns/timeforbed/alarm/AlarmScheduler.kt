@@ -67,7 +67,7 @@ object AlarmScheduler {
         val now = System.currentTimeMillis()
         val snoozes = AlarmMirror.snoozes(context)
         AlarmMirror.defs(context).forEach { d ->
-            val alarm = AlarmEntity(id = d.id, hour = d.hour, minute = d.minute, daysMask = d.daysMask, snoozeMinutes = d.snoozeMinutes)
+            val alarm = d.toEntity()
             setAt(context, nextTriggerMillis(alarm), d.id, d.id, snooze = false)
             snoozes[d.id]?.takeIf { it > now }?.let { setAt(context, it, d.id + SNOOZE_OFFSET, d.id, snooze = true) }
         }

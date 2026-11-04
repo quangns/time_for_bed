@@ -7,6 +7,10 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.MediaPlayer
@@ -17,6 +21,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -34,6 +39,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalTime
+import vn.quangns.timeforbed.MainActivity
 import vn.quangns.timeforbed.R
 import vn.quangns.timeforbed.core.Notifications
 
@@ -58,9 +64,7 @@ class AlarmRingService : Service() {
                     // Máy chưa mở khóa thì Room chưa mở được → dùng bản sao, không có thì vẫn reo với mặc định.
                     val alarm = withContext(Dispatchers.IO) {
                         runCatching { AppDatabase.get(applicationContext).alarmDao().get(id) }.getOrNull()
-                    } ?: AlarmMirror.get(applicationContext, id)?.let {
-                        AlarmEntity(id = id, hour = it.hour, minute = it.minute, daysMask = it.daysMask, snoozeMinutes = it.snoozeMinutes)
-                    } ?: AlarmEntity(id = id, hour = LocalTime.now().hour, minute = LocalTime.now().minute)
+                    } ?: AlarmMirror.get(applicationContext, id)?.toEntity() ?: AlarmEntity(id = id, hour = LocalTime.now().hour, minute = LocalTime.now().minute)
                     ring(alarm)
                 }
             }
@@ -68,7 +72,11 @@ class AlarmRingService : Service() {
                 current?.let { AlarmScheduler.scheduleSnooze(this, it) }
                 finish()
             }
-            ACTION_DISMISS -> finish()
+            ACTION_DISMISS -> {
+                val alarm = current
+                // Chống ngủ lại: chưa dừng hẳn, chuyển sang kiểm tra đã cầm máy vận động đủ chưa.
+                if (alarm != null && alarm.wakeCheck && wake == null) startWakeCheck(alarm) else finish()
+            }
             else -> if (current == null) finish()
         }
         return START_NOT_STICKY
@@ -82,6 +90,7 @@ class AlarmRingService : Service() {
     }
 
     private fun ring(alarm: AlarmEntity) {
+        stopWakeCheck()
         stopSound()
         handler.removeCallbacksAndMessages(null) // trước playSound để không xoá vòng bíp dự phòng
         current = alarm
@@ -166,6 +175,7 @@ class AlarmRingService : Service() {
 
     private fun finish() {
         handler.removeCallbacksAndMessages(null)
+        stopWakeCheck()
         stopSound()
         current = null
         _ringing.value = null
@@ -176,11 +186,120 @@ class AlarmRingService : Service() {
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
+        stopWakeCheck()
         stopSound()
         _ringing.value = null
         isRinging = false
         scope.cancel()
         super.onDestroy()
+    }
+
+    // --- Chống ngủ lại ---
+
+    private class WakeSession(val alarm: AlarmEntity, val meter: WakeMeter, val deadline: Long, val listener: SensorEventListener)
+
+    private var wake: WakeSession? = null
+    private var wakeLock: PowerManager.WakeLock? = null
+    /** Số lần đã reo lại vì chưa vận động đủ (trong lần báo thức này). */
+    private var ringsAgain = 0
+
+    private val wakeTick = object : Runnable {
+        override fun run() {
+            val w = wake ?: return
+            val now = SystemClock.uptimeMillis()
+            val required = w.alarm.wakeMoveSeconds
+            val active = w.meter.activeCount
+            when {
+                WakeCheckRules.passed(active, required) -> {
+                    showWakeDone()
+                    finish()
+                }
+                now >= w.deadline -> {
+                    if (WakeCheckRules.shouldRingAgain(active, required, ringsAgain)) {
+                        ringsAgain++
+                        ring(w.alarm) // chưa dậy hẳn: reo lại, tắt lần nữa sẽ kiểm tra lại từ đầu
+                    } else {
+                        finish()
+                    }
+                }
+                else -> {
+                    val state = WakeCheckState(w.alarm, active, required, w.deadline - now, ringsAgain + 1)
+                    _wakeCheck.value = state
+                    runCatching {
+                        getSystemService(NotificationManager::class.java).notify(Notifications.ID_ALARM_RING, buildWakeNotification(state))
+                    }
+                    handler.postDelayed(this, 1_000)
+                }
+            }
+        }
+    }
+
+    private fun startWakeCheck(alarm: AlarmEntity) {
+        val sm = getSystemService(SensorManager::class.java)
+        val accel = sm?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        if (accel == null) { // máy không có cảm biến gia tốc: không kiểm tra được
+            finish()
+            return
+        }
+        handler.removeCallbacksAndMessages(null) // huỷ hẹn tự tắt chuông sau 10 phút
+        stopSound()
+        _ringing.value = null // đóng màn hình báo thức
+        isRinging = false
+        val meter = WakeMeter()
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(e: SensorEvent) =
+                meter.onSample(SystemClock.uptimeMillis(), e.values[0], e.values[1], e.values[2])
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+        }
+        val windowMs = alarm.wakeCheckMinutes * 60_000L
+        sm.registerListener(listener, accel, SensorManager.SENSOR_DELAY_NORMAL, handler)
+        // Cảm biến không gửi số liệu khi CPU ngủ → giữ CPU thức trong lúc kiểm tra (tối đa ~10 phút).
+        wakeLock = getSystemService(PowerManager::class.java)
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "timeforbed:wakecheck")
+            .apply { acquire(windowMs + 60_000L) }
+        wake = WakeSession(alarm, meter, SystemClock.uptimeMillis() + windowMs, listener)
+        wakeTick.run()
+    }
+
+    private fun stopWakeCheck() {
+        handler.removeCallbacks(wakeTick)
+        wake?.let { getSystemService(SensorManager::class.java)?.unregisterListener(it.listener) }
+        wake = null
+        _wakeCheck.value = null
+        wakeLock?.let { if (it.isHeld) it.release() }
+        wakeLock = null
+    }
+
+    private fun buildWakeNotification(s: WakeCheckState): Notification {
+        val open = PendingIntent.getActivity(
+            this, Notifications.ID_ALARM_RING,
+            Intent(this, MainActivity::class.java).putExtra(MainActivity.EXTRA_TAB, 2),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val left = s.remainingMs / 1_000
+        return NotificationCompat.Builder(this, Notifications.CH_ALARM)
+            .setSmallIcon(R.drawable.ic_alarm)
+            .setContentTitle("Chống ngủ lại: cầm máy đi lại")
+            .setContentText("Đã vận động ${s.activeSeconds}/${s.requiredSeconds} giây · còn %d:%02d".format(left / 60, left % 60))
+            .setProgress(s.requiredSeconds, s.activeSeconds.coerceAtMost(s.requiredSeconds), false)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setSilent(true)
+            .setContentIntent(open)
+            .build()
+    }
+
+    private fun showWakeDone() {
+        val n = NotificationCompat.Builder(this, Notifications.CH_TIMER)
+            .setSmallIcon(R.drawable.ic_alarm)
+            .setContentTitle("Bạn đã dậy rồi")
+            .setContentText("Đã vận động đủ, chúc một ngày tốt lành!")
+            .setTimeoutAfter(30_000)
+            .setAutoCancel(true)
+            .build()
+        runCatching { getSystemService(NotificationManager::class.java).notify(Notifications.ID_WAKE_DONE, n) }
     }
 
     private fun buildNotification(alarm: AlarmEntity?): Notification {
@@ -220,6 +339,10 @@ class AlarmRingService : Service() {
 
         private val _ringing = MutableStateFlow<AlarmEntity?>(null)
         val ringing: StateFlow<AlarmEntity?> = _ringing.asStateFlow()
+
+        private val _wakeCheck = MutableStateFlow<WakeCheckState?>(null)
+        /** Đang kiểm tra chống ngủ lại (null = không). */
+        val wakeCheck: StateFlow<WakeCheckState?> = _wakeCheck.asStateFlow()
 
         fun actionIntent(context: Context, action: String): PendingIntent =
             PendingIntent.getService(

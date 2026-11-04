@@ -28,10 +28,7 @@ class AlarmReceiver : BroadcastReceiver() {
         // Báo thức lặp: đặt lần kế; một lần: tắt đi. Dùng bản sao nên làm được cả khi máy chưa mở khóa.
         val def = AlarmMirror.get(context, id)
         if (def != null && def.daysMask and 0x7F != 0) {
-            AlarmScheduler.schedule(
-                context,
-                AlarmEntity(id = id, hour = def.hour, minute = def.minute, daysMask = def.daysMask, snoozeMinutes = def.snoozeMinutes),
-            )
+            AlarmScheduler.schedule(context, def.toEntity())
         }
         val pending = goAsync()
         val app = context.applicationContext

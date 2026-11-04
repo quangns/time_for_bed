@@ -17,6 +17,7 @@ object Notifications {
     const val ID_MUTED = 1005
     const val ID_POMODORO = 1010
     const val ID_POMODORO_ALERT = 1011
+    const val ID_WAKE_DONE = 1012
 
     fun createChannels(context: Context) {
         val nm = context.getSystemService(NotificationManager::class.java)

@@ -10,6 +10,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.onNodeWithText
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -73,5 +75,17 @@ class AlarmScreenshotTest {
             initial = AlarmEntity(id = 3, hour = 6, minute = 30, daysMask = 0x1F, label = "Đi làm"),
             onDismiss = {}, onSave = {}, onDelete = {},
         )
+    }
+
+    @Test fun alarmEditorWakeCheck() {
+        shot("8-alarm-editor-wakecheck") {
+            AlarmEditor(
+                initial = AlarmEntity(id = 4, hour = 6, minute = 0, daysMask = 0x1F, label = "Đi làm", wakeCheck = true),
+                onDismiss = {}, onSave = {}, onDelete = {},
+            )
+        }
+        compose.onNodeWithText("Mức vận động").performScrollTo()
+        compose.waitForIdle()
+        save("8-alarm-editor-wakecheck")
     }
 }
